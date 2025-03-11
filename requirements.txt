@@ -1,0 +1,20 @@
+# TODO: add versions
+pip >= 23.0
+numpy
+scipy >= 1.12
+matplotlib
+jupyterlab
+numba
+flake8
+black
+black[jupyter]
+isort
+pre-commit
+sphinx  # not needed atm, later when I write a documentation
+pytest
+nbstripout
+mypy
+setuptools >= 67.0
+tqdm
+ipykernel
+seaborn
