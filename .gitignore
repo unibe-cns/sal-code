@@ -169,3 +169,14 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+
+## repo specific output file types:
+# image files
+*.png
+*.svg
+*.pdf
+
+# binaries
+*.pickle
+*.np[yz]
