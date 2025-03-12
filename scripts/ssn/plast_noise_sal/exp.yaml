@@ -1,0 +1,47 @@
+dim: 7
+
+seed:
+  distr: 4242
+  init: 4343
+  sim: 4444
+
+distr:
+  alpha: 1.0
+  beta: 1.0
+
+sim_params:
+  t_ref: &tref
+    50
+  tau_syn: *tref
+  num_last_spikes: 1
+
+num_epochs: 150001
+val_step: 2000
+val_factor: 1000
+
+lr:
+  bias: 0.001
+  weight: 0.001
+  symm: 0.002
+
+dur: 1000
+init_noise: 0.2
+weight_init: 0.2
+bias_init: 0.2
+max_w: 2.0
+max_b: 2.0
+
+stdp:
+  num_last_spikes: 1
+  ws:
+    a_plus: 1.0
+    a_minus: 1.0
+    tau_plus: *tref
+    tau_minus: *tref
+    noise: 0.05
+  sal:
+    a_plus: 1.0
+    a_minus: 1.0
+    tau_plus: *tref
+    tau_minus: *tref
+    noise: 0.05
