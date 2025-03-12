@@ -176,7 +176,14 @@ cython_debug/
 *.png
 *.svg
 *.pdf
+*.txt
 
 # binaries
 *.pickle
 *.np[yz]
+
+# ignore the results folder:
+results/
+
+# ignore the figure folders:
+figs/
