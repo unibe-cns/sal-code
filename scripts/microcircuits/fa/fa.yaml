@@ -1,0 +1,105 @@
+network_properties:
+  dims:
+  - 1
+  - 1
+  - 1
+  lambda_api: 0.02
+  lambda_nudge: 0.6
+  learning_lag: 2000
+  lr:
+  - down: 0.0
+    up: 0.2
+  - up: 0.003
+  n_last_spks: 1
+  size_moving_average: 2000
+  stdp_a_anticausal: 1.0
+  stdp_a_causal: -1.0
+  stdp_tau_anticausal: 10.0
+  stdp_tau_causal: 10.0
+  t_ref: 10
+  tau_syn: 10
+student_initial_parameters:
+  bias:
+  - -1.0
+  - -1.0
+  share_weights: False
+  random_weights_init_limits:
+    up:
+      - -3.0
+      - 3.0
+    down:
+      - -3.0
+      - 3.0
+student_simulation_settings:
+  len_epoch: 20
+  len_symmetrization: 5
+  len_validation: 6
+  num_epochs: 150  # 300
+  poisson_seed: 645360
+  weights_init_seed: 354535
+  record_all_spks: false
+  recorded_quantities:
+  - - u_in
+  - - u_pyr
+    - v_api
+    - w_up
+    - w_down
+  - - u_pyr
+    - v_nudge
+    - u_tgt
+    - w_up
+    - validation
+    - symmetrization
+  recorded_sample_length: 20000
+  set_sps: true
+  shuffle_training: true
+  shuffle_validation: false
+  t_pattern: 2000
+  training_seed: 918344
+  update_down: true
+teacher_initial_parameters:
+  bias:
+  - -1.0
+  - -1.0
+  weights:
+  - w_up: 2.0
+  - w_up: 2.0
+teacher_simulation_settings:
+  len_epoch: 8
+  len_validation: 6
+  num_epochs: 1
+  poisson_seed: 423433
+  recorded_quantities:
+  - - u_in
+  - - u_pyr
+    - v_bas
+    - v_api
+    - u_inn
+    - w_up
+    - w_down
+  - - u_pyr
+    - v_bas
+    - v_nudge
+    - u_tgt
+    - w_up
+  shuffle_training: true
+  shuffle_validation: false
+  t_pattern: 20000
+  training_seed: 890423
+u_input:
+  training:
+  - -3.0
+  - -2.5
+  - -2.0
+  - -0.8
+  - 0.8
+  - 2.0
+  - 2.5
+  - 3.0
+  validation:
+  - -2.7
+  - -1.8
+  - -0.5
+  - 0.5
+  - 1.8
+  - 2.7
