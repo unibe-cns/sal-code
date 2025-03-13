@@ -1,0 +1,14 @@
+[flake8]
+max-line-length =
+    88
+    #  complatible with black
+extend-ignore =
+    E203
+    # whitespace before :
+    E266
+    # multiple ##
+    E731
+    # allow lambda expressions
+exclude =
+    .git,
+    __pycache__,
