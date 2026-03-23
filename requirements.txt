@@ -18,3 +18,5 @@ setuptools >= 67.0
 tqdm
 ipykernel
 seaborn
+torch
+torchvision
