@@ -64,6 +64,10 @@ Usage: `python main_salnet.py -f exp_setting.yaml -s <type_of_experiment> --data
 
 A minimal working example for the Time evolution of SAL in the SALNet is provided by `scripts/symm_net/salnet_symm.py`.
 
+#### Figure 9
+
+The "Dale's law" experiment can be reproduced by `scripts/dales_law/EI-system.ipynb`.
+
 #### Figure 10
 
 The data for figure 7 can be reproached by `scripts/psp_shapes.ipynb`. Note that this notebook typically requires a lot of memory.
