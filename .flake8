@@ -9,6 +9,11 @@ extend-ignore =
     # multiple ##
     E731
     # allow lambda expressions
+    E501
+    # line too long. I ingore this, because typically black takes care of this.
+    # And if not, there's typically a reason and I would write noqa anyway...
+    E402
+    # Module level import not at top of file
 exclude =
     .git,
     __pycache__,

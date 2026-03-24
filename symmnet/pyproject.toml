@@ -1,0 +1,36 @@
+# pyproject.toml
+
+[build-system]
+requires      = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "symmnet"
+version = "0.1"
+description = "Compare symmetriation algorithm in deep neural networks"
+readme = "README.md"
+authors = [{ name = "Timo Gierlich", email = "timo.gierlich@unibe.ch" }]
+license = { file = "LICENSE" }
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "numpy >= 1.24",
+    "matplotlib >= 3.7",
+    "tqdm",
+    "torch",
+    "torchvision"
+]
+requires-python = ">=3.9"
+
+[tool.isort]
+profile = "black"
+
+[mypy]
+plugins = "numpy.typing.mypy_plugin"
+
+[project.urls]
+Homepage = "https://github.com/TODO"
+Issues = "https://github.com/TODO"
