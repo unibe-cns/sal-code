@@ -76,3 +76,7 @@ The data for figure 7 can be reproached by `scripts/psp_shapes.ipynb`. Note that
 
 Figure 8 can be reproduced by `scripts/plots_for_proof.ipynb`.
 
+
+## Version history
+
+See [CHANGELOG.md](CHANGELOG.md) for a full version history and changes between arXiv versions.
