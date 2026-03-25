@@ -4,7 +4,20 @@ This repository contains the python code to reproduce the results in the paper (
 
 ## How to set-up and run the simluations
 
+### Requirements and dependencies
+
+#### Software
+
+The software is purely written in Python (>= 3.11) and requires the packages listed in [requirements.txt](requirements.txt).
+
+#### Recommended hardware
+
+- Modern multicore CPU with 8 cores and >8GB RAM
+- For the SymmNet (deep learning) experiments, we recommend a GPU (the experiments in the paper were executed on Nvidia RTX4090)
+
 ### Setup
+
+Typical setup time: ca. 5 min
 
 1. Clone the repo (`git clone https://github.com/unibe-cns/sal-code.git` or `git clone git@github.com:unibe-cns/sal-code.git`) or create your own fork if you want to contribute to the project.
 2. Setup you local **python environment** using you favorite tool:
