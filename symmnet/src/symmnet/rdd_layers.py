@@ -1,6 +1,7 @@
 """Implementation of the dynamics of RDD layers."""
 
 import numpy as np
+
 from symmnet import (
     RDD_eta,
     RDD_init_window,

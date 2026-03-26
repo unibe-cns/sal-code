@@ -7,6 +7,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+
 from neuralsampling import utils
 from neuralsampling.network import GradDescent, NeuralSamplerFullyConnected, rect_kernel
 from neuralsampling.stdp_functions import STDPRuler
