@@ -116,7 +116,7 @@ class STDDMaker:
 
     @staticmethod
     def calc_equilibrium_distr(
-        T_full: Union[sparse.csr_matrix, sparse.csc_matrix]
+        T_full: Union[sparse.csr_matrix, sparse.csc_matrix],
     ) -> np.ndarray:
         """
         Calculate the equilibrium distribution for the given transition matrix.

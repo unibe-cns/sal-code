@@ -12,12 +12,10 @@ seaborn >= 0.13
 torch >= 2.5
 torchvision >= 0.20
 # for contributing:
-flake8
-black
-black[jupyter]
-isort
-pre-commit
-sphinx  # not needed atm, later when I write a documentation
-pytest
-nbstripout
-mypy
+pre-commit>=3.7.0
+black[jupyter]==24.4.2
+flake8==7.1.0
+isort==5.13.2
+nbstripout==0.7.1
+pytest>=8.0.0
+pytest-timeout>=2.3.0flake8

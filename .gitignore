@@ -185,5 +185,9 @@ cython_debug/
 # ignore the results folder:
 results/
 
+# ignore the folder where downloaded datasets are cached:
+data/
+
 # ignore the figure folders:
-figs/
+figs/*
+!figs/principle.png
