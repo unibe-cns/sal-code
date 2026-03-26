@@ -1,7 +1,6 @@
 """Implementation of the dynamics of RDD layers."""
 
 import numpy as np
-
 from symmnet import (
     RDD_eta,
     RDD_init_window,
@@ -146,9 +145,9 @@ class SpikingFA:
             self.RDD_window_ending_mask = self.RDD_time_left == 1
 
             # update maximum input drives for units in their RDD integration window
-            self.max_u[
-                np.logical_and(self.RDD_time_left > 0, self.u > self.max_u)
-            ] = self.u[np.logical_and(self.RDD_time_left > 0, self.u > self.max_u)]
+            self.max_u[np.logical_and(self.RDD_time_left > 0, self.u > self.max_u)] = (
+                self.u[np.logical_and(self.RDD_time_left > 0, self.u > self.max_u)]
+            )
 
         # update refractory period timesteps remaining for each neuron
         self.refractory_time_left[self.refractory_time_left > 0] -= 1

@@ -128,13 +128,9 @@ def bm_to_probs(W, b, force=False):
     # reject working on more than 15 neurons unless forced
     N = len(b)
     if N > 15 and not force:
-        raise ValueError(
-            "The function takes too long for more than 15\
+        raise ValueError("The function takes too long for more than 15\
           neurons. Received {}. To calculate anyway, use\
-          the force option.".format(
-                N
-            )
-        )
+          the force option.".format(N))
     values = np.zeros(2**N)
     coactivation = np.zeros((N, N))
 

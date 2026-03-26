@@ -1,4 +1,5 @@
 """Calculate the Phase Plane Diagramm and analyse it."""
+
 # /usr/bin/env python3
 
 import copy
@@ -9,10 +10,9 @@ import numpy as np
 import numpy.typing as npt
 from scipy.integrate import trapezoid
 from scipy.interpolate import CubicSpline, RegularGridInterpolator
-from tqdm.contrib.itertools import product
-
 from stddc import STDDMaker
 from stddc.distr2 import SalFunc
+from tqdm.contrib.itertools import product
 
 
 def flatten(lst):
