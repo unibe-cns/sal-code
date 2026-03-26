@@ -13,9 +13,9 @@ torch >= 2.5
 torchvision >= 0.20
 # for contributing:
 pre-commit>=3.7.0
-black[jupyter]==24.4.2
-flake8==7.1.0
-isort==5.13.2
-nbstripout==0.7.1
+black[jupyter]==26.3.1
+flake8==7.3.0
+isort==8.0.1
+nbstripout==0.9.1
 pytest>=8.0.0
-pytest-timeout>=2.3.0flake8
+pytest-timeout>=2.3.0
