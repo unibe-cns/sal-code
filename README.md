@@ -65,6 +65,10 @@ The raw data can be plotted with `scripts/microcircuits/plot_fig.ipynb`.
 
 #### Figure 7
 
+To reproduce the data and plots for figure 7 (i.e., the weight scatter plots comparing two layers symmetrized by SAL, RDD and STDWI), execute the notebook `scripts/symm_net/scatter_stdwi_rdd_sal.ipynb`.
+
+#### Figure 8
+
 A minimal working example for the deep learning experiment is provided by `scripts/symm_net/main_salnet.py` and the corresponding parameter file `exp_setting.yaml`.
 
 Usage: `python main_salnet.py -f exp_setting.yaml -s <type_of_experiment> --dataset <dataset> --tags <tag1,tag2>`
@@ -73,19 +77,19 @@ Usage: `python main_salnet.py -f exp_setting.yaml -s <type_of_experiment> --data
 - `dataset`: choose one the following datasets: `cifar10`, `svhn`, `mnist`, `fmnist`
 - optionally, you can pass a list of descriptive tags to keep tack of your runs.
 
-#### Figure 8
+#### Figure 9
 
 A minimal working example for the Time evolution of SAL in the SALNet is provided by `scripts/symm_net/salnet_symm.py`.
 
-#### Figure 9
+#### Figure 10
 
 The "Dale's law" experiment can be reproduced by `scripts/dales_law/EI-system.ipynb`.
 
-#### Figure 10
+#### Figure 11
 
 The data for figure 7 can be reproached by `scripts/psp_shapes.ipynb`. Note that this notebook typically requires a lot of memory.
 
-#### Figure 11
+#### Figure 12
 
 Figure 8 can be reproduced by `scripts/plots_for_proof.ipynb`.
 
