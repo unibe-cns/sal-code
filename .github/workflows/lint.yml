@@ -1,0 +1,33 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.11"
+
+      - name: Install linting tools
+        run: |
+          pip install black[jupyter]==26.3.1 flake8==7.3.0 isort==8.0.1
+
+      - name: Check formatting with black
+        run: black --check .
+
+      - name: Check import order with isort
+        run: isort --check-only --profile black .
+
+      - name: Lint with flake8
+        run: flake8 .

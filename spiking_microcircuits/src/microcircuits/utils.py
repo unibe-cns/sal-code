@@ -184,7 +184,7 @@ class RunResult(dict):
         if nrn_type == "input":
             if neuron_ids == "all":
                 return self["input_spikes"]
-            elif type(neuron_ids) == int:
+            elif type(neuron_ids) is int:
                 return self["input_spikes"][slice(neuron_ids, neuron_ids + 1)]
             else:
                 return self["input_spikes"][neuron_ids]
@@ -192,7 +192,7 @@ class RunResult(dict):
         sel = nrn_type + "_spikes"
         if neuron_ids == "all":
             res = self[sel][layer - 1]
-        elif type(neuron_ids) == int:
+        elif type(neuron_ids) is int:
             # this to make sure that a list is returned!
             res = self[sel][layer - 1][slice(neuron_ids, neuron_ids + 1)]
         else:

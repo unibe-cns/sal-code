@@ -1,23 +1,21 @@
-# TODO: add versions
+# requirements.txt
 # for installing and running the main software
-pip >= 23.0
-setuptools >= 67.0
-numpy >= 2.1
-scipy >= 1.12
-matplotlib >= 3.10
-jupyter >= 1.1
-numba >= 0.61
-tqdm >= 4.67
-seaborn >= 0.13
-torch >= 2.5
-torchvision >= 0.20
+pip>=23.0
+setuptools>=67.0
+numpy==2.1
+scipy==1.15
+matplotlib==3.10
+jupyter==1.1
+numba==0.61
+tqdm==4.67
+seaborn==0.13
+torch==2.5
+torchvision==0.20
 # for contributing:
-flake8
-black
-black[jupyter]
-isort
-pre-commit
-sphinx  # not needed atm, later when I write a documentation
-pytest
-nbstripout
-mypy
+pre-commit>=3.7.0
+black[jupyter]==26.3.1
+flake8==7.3.0
+isort==8.0.1
+nbstripout==0.9.1
+pytest>=8.0.0
+pytest-timeout>=2.3.0

@@ -1,6 +1,31 @@
-# Official code repository for the paper "Weight transport through spike timing for robust local gradients", Gierlich et al., 2025
+# Official code repository for the original spike-based alignment learning paper
 
-This repository contains the python code to reproduce the results in the paper ([Link](https://arxiv.org/abs/2503.02642)).
+<!-- [![CI](https://github.com/unibe-cns/sal-code/actions/workflows/ci.yml/badge.svg)](https://github.com/unibe-cns/sal-code/actions/workflows/ci.yml) -->
+<!-- [![Lint](https://github.com/unibe-cns/sal-code/actions/workflows/lint.yml/badge.svg)](https://github.com/unibe-cns/sal-code/actions/workflows/lint.yml) -->
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![arXiv](https://img.shields.io/badge/arXiv-2503.02642-b31b1b.svg)](https://arxiv.org/abs/2503.02642)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+
+## About this repository
+
+This repository contains the official implementation for the paper
+**"Weight transport through spike timing for robust local gradients"**
+(Gierlich et al., 2025, [arXiv:2503.02642](https://arxiv.org/abs/2503.02642)).
+
+The paper presents a solution to the well-known **weight transport problem** -- a long-standing problem in computational neuroscience and neuromorphic computing.
+Many well-established learning algorithms from machine learning such as backpropagation require some form of weight symmetry, which effectively means that weight information has to be copied from one synapse to another -- an operation that violates locality in physical computing.
+
+In our paper, we present **spike-based alignment learning (SAL)**, a missing peace for constructing purely local online learning rules for both the brain and brain-inspired spiking hardware.
+
+This repository contains the python code to reproduce the experiments presented in the paper.
+We demonstrate the effectiveness of SAL in various families of models:
+
+![SAL's working principle](figs/principle.png)
+
+- **Spiking sampling networks (SSN)**: In this spiking model for brain-inspired Bayesian inference, we show that SAL increases the robustness against parameter and plasticity noise 
+- **cortical microcircuits**: In a spiking model for physically plausible error transport, SAL enables the alignment of feedback weights to the forward pathway, thus allowing the backpropagation of correct learning signal.
+- **Deep convolutional networks**: A standard image classification task serves as framework to benchmark SAL against other spiking and non-spiking weight symmetrization algorithms
+
 
 ## How to set-up and run the simluations
 

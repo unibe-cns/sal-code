@@ -2,7 +2,6 @@
 
 """Copy and simplify code form original repo."""
 
-
 import numpy as np
 from tqdm import tqdm, trange
 

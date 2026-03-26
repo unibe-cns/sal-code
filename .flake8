@@ -14,6 +14,10 @@ extend-ignore =
     # And if not, there's typically a reason and I would write noqa anyway...
     E402
     # Module level import not at top of file
+    W503
+    # also for black compatibility
 exclude =
     .git,
     __pycache__,
+    .eggs,
+    *.egg-info,

@@ -1,0 +1,30 @@
+# pyproject.toml
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = [
+   "symmnet",
+   "neuralsampling",
+   "microcircuits",
+   "stdds",
+   "load_utils",
+]
+
+[tool.black]
+line-length = 88
+exclude = '''
+/(
+    \.git
+  | \.eggs
+  | \.venv
+  | __pycache__
+  | .*\.egg-info
+  | runs
+  | \.virtual_documents
+  | \.ipynb_checkpoints
+)/
+'''
+
+[tool.pytest.ini_options]
+timeout = 60

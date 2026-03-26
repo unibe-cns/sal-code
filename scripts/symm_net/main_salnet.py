@@ -11,9 +11,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np  # noqa
 import torch
-from load_utils import settings_loader
 from tqdm import tqdm
 
+from load_utils import settings_loader
 from symmnet import ConvNet
 from symmnet.datasets import cifar10, fmnist, mnist, svhn  # noqa
 from symmnet.sal_net import SALNet
