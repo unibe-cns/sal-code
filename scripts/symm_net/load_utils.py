@@ -76,6 +76,9 @@ def settings_loader():
     parser.add_argument("--n_epochs", type=int)
     parser.add_argument("--tags", type=str)
     parser.add_argument("--group_tags", type=str)
+    parser.add_argument(
+        "--output-dir", type=str, default="../../results/symm_net", dest="output_dir"
+    )
     args = parser.parse_args()
 
     if args.f:
@@ -107,4 +110,13 @@ def settings_loader():
     else:
         raise ValueError(f"Dataset '{dataset_name}' not allowed")
 
-    return params, sal_params, rdd_params, dataset, tags_list, group_tags_list, args.f
+    return (
+        params,
+        sal_params,
+        rdd_params,
+        dataset,
+        tags_list,
+        group_tags_list,
+        args.f,
+        args.output_dir,
+    )

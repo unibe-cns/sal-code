@@ -72,6 +72,7 @@ dataset = cifar10
     tags,
     group_tags,
     param_file,
+    output_dir,
 ) = settings_loader()
 
 # some general checks:
@@ -113,7 +114,7 @@ def append_metric(metrics_dict, key, value):
 # Data tracking setup
 # ---------------------------
 
-run_dir = create_run_dirs(base_dir="runs", tags=tags)
+run_dir = create_run_dirs(base_dir=output_dir, tags=tags)
 
 # copy param file to run root
 if param_file is not None:

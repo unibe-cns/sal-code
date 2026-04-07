@@ -28,3 +28,6 @@ exclude = '''
 
 [tool.pytest.ini_options]
 timeout = 60
+markers = [
+    "pytorch: requires PyTorch CNN training, slow on CPU (run with --pytorch)",
+]
