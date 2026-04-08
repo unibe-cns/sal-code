@@ -24,7 +24,7 @@ class EigenvalueError(Exception):
 
 
 class STDDMaker:
-    """Docstring."""
+    """Computes the spike-timing difference distribution (STDD) for a two-neuron model analytically via transfer matrices."""
 
     def __init__(
         self,
@@ -38,27 +38,15 @@ class STDDMaker:
         b_2: float,
     ):
         """
-        Initialize the STDDMaker with the given parameters.
-
-        :param psp: A function representing the Post-Synaptic Potential.
-        :type psp: PSPFunc
-        :param t_max: Maximum time step.
-        :type t_max: int
-        :param t_ref: Refractory period.
-        :type t_ref: int
-        :param t_syn: Synaptic time constant.
-        :type t_syn: int
-        :param w_12: Synaptic weight from neuron 1 to neuron 2.
-        :type w_12: float
-        :param w_21: Synaptic weight from neuron 2 to neuron 1.
-        :type w_21: float
-        :param b_1: Bias for neuron 1.
-        :type b_1: float
-        :param b_2: Bias for neuron 2.
-        :type b_2: float
-
-        The PSPFunc is expected to be a callable that takes three integers and
-        returns a float.
+        Args:
+            psp: Post-synaptic potential function.
+            t_max: Maximum lag (state space size).
+            t_ref: Refractory period.
+            t_syn: Synaptic time constant.
+            w_12: Synaptic weight from neuron 2 to neuron 1.
+            w_21: Synaptic weight from neuron 1 to neuron 2.
+            b_1: Bias of neuron 1.
+            b_2: Bias of neuron 2.
         """
         assert t_ref < t_max, "t_ref must be smaller than t_max."
         self.psp = psp
@@ -106,27 +94,16 @@ class STDDMaker:
     def create_transition_matrix(
         self, w_12: float, w_21: float, b_1: float, b_2: float
     ) -> sparse.dok_matrix:
-        """
-        Create a transition matrix.
+        """Build the sparse transfer matrix T for the given synaptic weights and biases.
 
-        :param psp: Function representing the Post-Synaptic Potential.
-        :type psp: PSPFunc
-        :param t_ref: Refractory period.
-        :type t_ref: int
-        :param t_max: Maximum time step.
-        :type t_max: int
-        :param w_12: Synaptic weight from neuron 1 to neuron 2.
-        :type w_12: float
-        :param w_21: Synaptic weight from neuron 2 to neuron 1.
-        :type w_21: float
-        :param b_1: Bias for neuron 1.
-        :type b_1: float
-        :param b_2: Bias for neuron 2.
-        :type b_2: float
-        :param t_syn: Synaptic time constant.
-        :type t_syn: int
-        :return: A sparse transition matrix.
-        :rtype: sparse.dok_matrix
+        Args:
+            w_12: Synaptic weight from neuron 2 to neuron 1.
+            w_21: Synaptic weight from neuron 1 to neuron 2.
+            b_1: Bias of neuron 1.
+            b_2: Bias of neuron 2.
+
+        Returns:
+            Sparse transfer matrix of shape (t_max², t_max²).
         """
         T_full = sparse.dok_matrix((self.t_max**2, self.t_max**2))
 
@@ -142,17 +119,15 @@ class STDDMaker:
     def calc_equilibrium_distr(
         T_full: Union[sparse.csr_matrix, sparse.csc_matrix],
     ) -> np.ndarray:
-        """
-        Calculate the equilibrium distribution for the given transition matrix.
+        """Compute the equilibrium distribution of the two-neuron Markov chain.
 
-        Calculates the first eigenvalue near 1.+0i and the corresponding
-        eigenvector which is equal to the equilibrium distribution of the
-        two neuron system.
+        Finds the eigenvector of T_full corresponding to eigenvalue 1.
 
-        :param T_full: Sparse transition matrix.
-        :type T_full: Union[scipy.sparse.csr_matrix, scipy.sparse.csc_matrix]
-        :return: Equilibrium distribution vector.
-        :rtype: numpy.ndarray
+        Args:
+            T_full: Sparse transfer matrix.
+
+        Returns:
+            Normalized equilibrium distribution vector.
         """
         try:
             eig_val, eig_vec = eigs(T_full, k=1, sigma=1.0 + 0.0j)
@@ -187,10 +162,7 @@ class STDDMaker:
     def _create_nonspiking_trans_matrix(
         T_full: Union[sparse.csr_matrix, sparse.csc_matrix], t_max: int
     ) -> sparse.csr_matrix:
-        """
-        Returns a copy of the transition matrix where all entries are zero that
-        would let either neuron spike.
-        """
+        """Return a copy of T_full with rows zeroed out where either neuron spikes."""
         T_tilde = T_full.copy()
 
         # neuron 2 cannot spike
@@ -211,7 +183,7 @@ class STDDMaker:
     def _create_trans_matrix_neuron_2(
         self, T_full: Union[sparse.csr_matrix, sparse.csc_matrix]
     ) -> sparse.csr_matrix:
-        """Docstring."""
+        """Build the spiking transfer matrix for neuron 2 (shape: t_max × t_max²)."""
         T_hat_right = sparse.dok_matrix((self.t_max, self.t_max**2))
         for ceta_1 in range(1, self.t_max):
             # if neuron 2 spikes, copy line into T_hat
@@ -226,11 +198,17 @@ class STDDMaker:
     def _calc_half_histogram(
         self, T_full: Union[sparse.csr_matrix, sparse.csc_matrix]
     ) -> np.ndarray:
-        """Returns a version of T where neuron 2 will spike.
+        """Compute one half of the STDD histogram.
 
-        Used to calc the RIGHT side of the dt-distribution (dt > 0)
-        The dimention of the matrix is (t_max, t_max**2) --> rho = T * q, with rho
-        being the desired dt-distribution.
+        Starting from the equilibrium distribution conditioned on neuron 1 spiking,
+        iterates forward in time and accumulates the probability of neuron 2 spiking
+        at each lag.
+
+        Args:
+            T_full: Sparse transfer matrix.
+
+        Returns:
+            Array of length t_max with unnormalized spike probability at each lag.
         """
         # create the transition_matrix when no spike occurs
         T_nospike = self._create_nonspiking_trans_matrix(T_full, self.t_max)
@@ -258,16 +236,13 @@ class STDDMaker:
             distr_spike = T_spike.dot(equil_distr)
             stdd += distr_spike
 
-        # cut off the last bit, because it contains all the remaining transitions
-        # (i.e. an artefact comming from the existanance of a t_max)
-        # stdd = stdd[:-1]
         # normalize stdd:
         stdd /= np.sum(stdd) * 2.0
 
         return stdd
 
     def calc_right(self) -> npt.NDArray:
-        """DOCSTRING."""
+        """Compute the right half of the STDD (dt > 0, neuron 2 spikes after neuron 1)."""
 
         self.T_full_right = self.create_transition_matrix(
             self.w_12, self.w_21, self.b_1, self.b_2
@@ -277,7 +252,7 @@ class STDDMaker:
         return stdd_right[1:]
 
     def calc_left(self) -> npt.NDArray:
-        """DOCSTRING."""
+        """Compute the left half of the STDD (dt < 0, neuron 2 spikes before neuron 1)."""
 
         self.T_full_left = self.create_transition_matrix(
             self.w_21, self.w_12, self.b_2, self.b_1
@@ -287,7 +262,15 @@ class STDDMaker:
         return stdd_left[:0:-1]
 
     def calc_stdd(self, fill_middle: str = "nan") -> npt.NDArray:
-        """DOCSTRING."""
+        """Compute the full STDD and store it in self.stdd.
+
+        Args:
+            fill_middle: How to fill the dt=0 bin. One of 'nan', 'zero', or
+                'smooth' (average of adjacent bins).
+
+        Returns:
+            Array of length 2*t_max - 1.
+        """
         ALLOWED = ["nan", "zero", "smooth"]
         assert (
             fill_middle in ALLOWED
@@ -309,7 +292,18 @@ class STDDMaker:
         return np.copy(self.stdd)
 
     def calc_sal(self, func: SalFunc, *args: int | float) -> tuple[float, float]:
-        """DOCSTRING."""
+        """Compute SAL values for both synaptic directions.
+
+        Convolves the STDD with a kernel function to produce the SAL weight
+        update.
+
+        Args:
+            func: Kernel function (e.g. exp_window).
+            *args: Additional arguments passed to func.
+
+        Returns:
+            Tuple (sal_12, sal_21).
+        """
         kernel_vals = func(self.times, *args)
 
         if self.stdd is None:
@@ -325,7 +319,7 @@ class STDDMaker:
 
 
 def main():
-    """DOCSTRING."""
+    """Plot the STDD for a default two-neuron configuration."""
     stdd_maker = STDDMaker(
         psp=rect_PSP, t_max=30, t_ref=10, t_syn=10, w_12=0.5, w_21=1.0, b_1=0.0, b_2=0.0
     )
