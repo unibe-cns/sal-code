@@ -16,11 +16,11 @@ from stddc import STDDMaker
 from stddc.distr import SalFunc
 
 
-def flatten(lst):
+def flatten(lst: list) -> list:
     return [item for sublist in lst for item in sublist]
 
 
-def reshape_2d(flat_list, num_rows):
+def reshape_2d(flat_list: list, num_rows: int) -> list:
     if len(flat_list) % num_rows != 0:
         raise ValueError("The length of the list must be divisible by num_rows")
 
@@ -50,7 +50,7 @@ class PPDMaker:
         """SAL values for W_21 (shape: w_len × w_len)."""
         return self.sal_grid[:, :, 1]
 
-    def _distribute_stddmakers(self):
+    def _distribute_stddmakers(self) -> None:
         for w in self.w_range:
             sub_arr = []
             for v in self.w_range:
@@ -60,13 +60,13 @@ class PPDMaker:
                 sub_arr.append(sm)
             self._stddmaker_grid.append(sub_arr)
 
-    def calc_sal_grid(self, func: SalFunc, *args):
+    def calc_sal_grid(self, func: SalFunc, *args: int | float) -> npt.NDArray:
         for i, j in product(range(self.w_len), range(self.w_len)):
             self.sal_grid[i, j, :] = self._stddmaker_grid[i][j].calc_sal(func, *args)
 
         return self.sal_grid
 
-    def upscale_sal_grid(self, n: int):
+    def upscale_sal_grid(self, n: int) -> npt.NDArray:
         self.w_range_hd = np.linspace(self.w_range[0], self.w_range[-1], n)
         self.sal_grid_hd = np.empty((n, n, 2))
 
@@ -93,7 +93,13 @@ class PPDMaker:
         return self.sal_grid_hd
 
     @staticmethod
-    def _calc_roots(x, y, vals, axis="y", warn_mulitple=True):
+    def _calc_roots(
+        x: npt.NDArray,
+        y: npt.NDArray,
+        vals: npt.NDArray,
+        axis: str = "y",
+        warn_mulitple: bool = True,
+    ) -> npt.NDArray:
         if axis == "y":
             root_axis = y
             other_axis = x
@@ -117,7 +123,7 @@ class PPDMaker:
 
         return np.array(all_roots)
 
-    def calc_boa(self, upscale: Optional[int] = int, axis="y"):
+    def calc_boa(self, upscale: Optional[int] = None, axis: str = "y") -> npt.NDArray:
         """Calculate the basin of attration in a PPD."""
 
         if upscale is None:
@@ -133,14 +139,14 @@ class PPDMaker:
         return boa
 
     @staticmethod
-    def rotate_boa(boa):
+    def rotate_boa(boa: npt.NDArray) -> npt.NDArray:
         """'Rotate' the basin of attraction."""
         w = 0.5 * (boa[:, 0] + boa[:, 1])
         d = -0.5 * (boa[:, 0] - boa[:, 1])
         return np.column_stack((w, d))
 
     @staticmethod
-    def deviation_of_boa(boa):
+    def deviation_of_boa(boa: npt.NDArray) -> float:
         """Normalized integral under rotated BOA."""
         w = 0.5 * (boa[:, 0] + boa[:, 1])
         d = 0.5 * np.abs(boa[:, 0] - boa[:, 1]) / np.abs(w)

@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 
-from typing import Union
-
 import numpy as np
 
 
-def rect_PSP(zeta, tau_ref, tau_syn):
+def rect_PSP(zeta: int, tau_ref: int, tau_syn: int) -> float:
     """rectangular psp shape."""
     return np.heaviside(-zeta + tau_ref, 0.0) * np.heaviside(zeta, 1.0)
 
 
-def exp_PSP(zeta, tau_ref, tau_syn):
+def exp_PSP(zeta: int, tau_ref: int, tau_syn: int) -> float:
     """exponential psp shape"""
     a = (tau_ref / tau_syn) / (1 - np.exp(-tau_ref / tau_syn))
     return a * np.exp(-zeta / tau_syn)
 
 
-def cutoff_PSP(zeta, tau_ref, tau_syn):
+def cutoff_PSP(zeta: int, tau_ref: int, tau_syn: int) -> float:
     if zeta <= tau_ref:
         a = (tau_ref / tau_syn) / (1 - np.exp(-tau_ref / tau_syn))
         return a * np.exp(-zeta / tau_syn)
@@ -24,7 +22,7 @@ def cutoff_PSP(zeta, tau_ref, tau_syn):
         return 0.0
 
 
-def tail_PSP(zeta, tau_ref, tau_syn):
+def tail_PSP(zeta: int, tau_ref: int, tau_syn: int) -> float:
     if zeta <= tau_ref:
         return 1.0
     else:
@@ -32,7 +30,7 @@ def tail_PSP(zeta, tau_ref, tau_syn):
         return a * np.exp(-zeta / tau_syn)
 
 
-def alpha_PSP(zeta, tau_ref, tau_syn):
+def alpha_PSP(zeta: int, tau_ref: int, tau_syn: int) -> float:
     if zeta > 0.0:
         return tau_ref / tau_syn**2 * zeta * np.exp(-zeta / tau_syn)
     else:
@@ -40,7 +38,7 @@ def alpha_PSP(zeta, tau_ref, tau_syn):
 
 
 def _exp_window(
-    dt: Union[float, int],
+    dt: float | int,
     a_plus: float,
     a_minus: float,
     tau_plus: float,

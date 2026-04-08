@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import warnings
-from typing import Callable, Tuple, Union
+from typing import Callable, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,7 +14,7 @@ from .matrix import transition_matrix
 
 PSPFunc = Callable[[int, int, int], float]
 
-SalFunc = Callable[[npt.NDArray, Union[int, float], ...], npt.NDArray]
+SalFunc = Callable[[npt.NDArray, int | float], npt.NDArray]
 
 
 class EigenvalueError(Exception):
@@ -266,7 +266,7 @@ class STDDMaker:
 
         return stdd
 
-    def calc_right(self):
+    def calc_right(self) -> npt.NDArray:
         """DOCSTRING."""
 
         self.T_full_right = self.create_transition_matrix(
@@ -276,7 +276,7 @@ class STDDMaker:
         stdd_right = self._calc_half_histogram(self.T_full_right)
         return stdd_right[1:]
 
-    def calc_left(self):
+    def calc_left(self) -> npt.NDArray:
         """DOCSTRING."""
 
         self.T_full_left = self.create_transition_matrix(
@@ -308,7 +308,7 @@ class STDDMaker:
 
         return np.copy(self.stdd)
 
-    def calc_sal(self, func: SalFunc, *args: Union[int, float]) -> Tuple[float, float]:
+    def calc_sal(self, func: SalFunc, *args: int | float) -> tuple[float, float]:
         """DOCSTRING."""
         kernel_vals = func(self.times, *args)
 
