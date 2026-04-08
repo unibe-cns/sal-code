@@ -10,9 +10,10 @@ import numpy as np
 import numpy.typing as npt
 from scipy.integrate import trapezoid
 from scipy.interpolate import CubicSpline, RegularGridInterpolator
-from stddc import STDDMaker
-from stddc.distr2 import SalFunc
 from tqdm.contrib.itertools import product
+
+from stddc import STDDMaker
+from stddc.distr import SalFunc
 
 
 def flatten(lst):
@@ -38,6 +39,16 @@ class PPDMaker:
         self._stddmaker_grid = []
         self._distribute_stddmakers()
         self.sal_grid = np.zeros((self.w_len, self.w_len, 2))
+
+    @property
+    def sal_12(self) -> npt.NDArray:
+        """SAL values for W_12 (shape: w_len × w_len)."""
+        return self.sal_grid[:, :, 0]
+
+    @property
+    def sal_21(self) -> npt.NDArray:
+        """SAL values for W_21 (shape: w_len × w_len)."""
+        return self.sal_grid[:, :, 1]
 
     def _distribute_stddmakers(self):
         for w in self.w_range:
