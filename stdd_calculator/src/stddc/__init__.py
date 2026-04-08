@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from .distr2 import STDDMaker
+from .distr import STDDMaker
 from .funcs import (
     alpha_PSP,
     cutoff_PSP,
