@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stddc"
-version = "0.1"
+version = "0.2"
 description = "Calculate spike timing difference distributions as presented in https://arxiv.org/abs/2503.02642"
 readme = "README.md"
 authors = [{ name = "Timo Gierlich", email = "timo.gierlich@unibe.ch" }]
