@@ -7,7 +7,7 @@ known_first_party = [
    "symmnet",
    "neuralsampling",
    "microcircuits",
-   "stdds",
+   "stddc",
    "load_utils",
 ]
 
