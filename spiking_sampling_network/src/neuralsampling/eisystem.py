@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy.special import expit
@@ -16,45 +15,27 @@ from .utils import spike_rate
 
 
 class EISystem:
-    """
-    Excitatory-Inhibitory network system simulation.
+    """Excitatory-Inhibitory network: parameter storage and simulation results.
 
-    Provides parameter storage and computed results for a fixed small EI network,
-    with uniform attribute access for weights, biases, rates, correlations,
-    effective weights, STDD and STDP values.
+    Args:
+        weights: Initial connection weights keyed by name (e.g., "e2_e1").
+        bias: Initial neuron biases keyed by name (e.g., "e1").
+        tref: Reference time step.
+        tsyn: Synaptic time constant.
+        kernel: PSP kernel function.
 
-    Parameters
-    ----------
-    weights : dict[str, float]
-        Initial connection weights, keyed by connection name (e.g., "e2_e1").
-    bias : dict[str, float]
-        Initial neuron biases, keyed by neuron name (e.g., "e1").
-    tref : float
-        Reference time step in simulation units.
-    tsyn : float
-        Synaptic time constant.
-    kernel : object
-        Kernel function or kernel identifier used in the simulation.
-
-    Attributes
-    ----------
-    W : ndarray of shape (4, 4)
-        Weight matrix for the network.
-    b : ndarray of shape (4,)
-        Bias vector for neurons.
-    rates : dict[str, float]
-        Computed firing rates per neuron (set by `calc_rates`).
-    corrs : dict[str, np.ndarray]
-        Spike correlations per connection (set by `calc_correlations`).
-    stdds : dict[str, np.ndarray]
-        Spike-time delay histograms per connection (set by `calc_stdd`).
-    stdps : np.ndarray
-        STDP measures per connection (set by `calc_stdp`).
+    Attributes:
+        W: (4, 4) weight matrix.
+        b: (4,) bias vector.
+        rates: Firing rates per neuron (set by `calc_rates`).
+        corrs: Spike correlations per connection (set by `calc_correlations`).
+        stdds: Spike-time delay histograms per connection (set by `calc_stdd`).
+        stdps: STDP measures for E-E synapses (set by `calc_stdp`).
     """
 
-    NEURONS: Dict[str, int] = {"e1": 0, "e2": 1, "i1": 2, "i2": 3}
+    NEURONS: dict[str, int] = {"e1": 0, "e2": 1, "i1": 2, "i2": 3}
 
-    CONNECTIONS: Dict[str, Tuple[int, int]] = {
+    CONNECTIONS: dict[str, tuple[int, int]] = {
         "e2_e1": np.s_[1, 0],
         "e1_e2": np.s_[0, 1],
         "i1_e1": np.s_[2, 0],
@@ -64,7 +45,7 @@ class EISystem:
     }
 
     @staticmethod
-    def _convert_connection_indices(np_idx: np.s_[int, int]) -> Tuple[int, int]:
+    def _convert_connection_indices(np_idx: np.s_[int, int]) -> tuple[int, int]:
         """Convert numpy index slice to 1-based tuple index."""
         return (np_idx[1] + 1, np_idx[0] + 1)
 
@@ -84,13 +65,13 @@ class EISystem:
 
     def __init__(
         self,
-        weights: Dict[str, float],
-        bias: Dict[str, float],
+        weights: dict[str, float],
+        bias: dict[str, float],
         tref: float,
         tsyn: float,
         kernel: object,
-    ):
-        self.tmax: Optional[float] = None
+    ) -> None:
+        self.tmax: float | None = None
         self.tref = tref
         self.tsyn = tsyn
         self.kernel = kernel
@@ -104,41 +85,34 @@ class EISystem:
         for name, idx in self.NEURONS.items():
             self.b[idx] = bias[name]
 
-        self.rates: Dict[str, float] = {}
-        self.corrs: Dict[str, np.ndarray] = {}
-        self.stdds: Dict[str, np.ndarray] = {}
+        self.rates: dict[str, float] = {}
+        self.corrs: dict[str, np.ndarray] = {}
+        self.stdds: dict[str, np.ndarray] = {}
         self.stdps: np.zeros(2, 2)
 
-    def _set_weight(self, idx, value):
+    def _set_weight(self, idx: tuple, value: float) -> None:
         self.W[idx] = value
 
-    def _set_bias(self, idx, value):
+    def _set_bias(self, idx: int, value: float) -> None:
         self.b[idx] = value
 
-    def _get_rate(self, name):
+    def _get_rate(self, name: str) -> float | None:
         return self.rates.get(name, None)
 
-    def _get_corr(self, conn):
+    def _get_corr(self, conn: str) -> np.ndarray | None:
         return self.corrs.get(conn, None)
 
-    def _get_stdd(self, conn):
+    def _get_stdd(self, conn: str) -> np.ndarray | None:
         return self.stdds.get(conn, None)
 
-    def _get_stdp(self, idx):
+    def _get_stdp(self, idx: tuple) -> float:
         return self.stdps[idx]
 
     def simulate(self, tmax: float) -> None:
-        """
-        Simulate spike trains for all neurons in the network.
+        """Simulate spike trains for all neurons and store in `self.spks`.
 
-        Parameters
-        ----------
-        tmax : float
-            Total simulation duration.
-
-        Notes
-        -----
-        Sets `self.spks` to spike event array used for downstream analyses.
+        Args:
+            tmax: Total simulation duration.
         """
         self.tmax = tmax
         self.spks = sim_poisson_neurons(
@@ -146,30 +120,19 @@ class EISystem:
         )
 
     def calc_rates(self) -> None:
-        """
-        Calculate and store firing rates for all neurons.
-
-        Notes
-        -----
-        Requires `self.spks` to be set (via `simulate()`).
-        """
+        """Compute and store firing rates in `self.rates`. Requires `simulate()` first."""
         rates_array = spike_rate(self.spks, (1, 2, 3, 4), t_max=self.tmax) * self.tref
         self.rates = {n: r for (n, r) in zip(self.NEURONS.keys(), rates_array)}
 
     def calc_correlations(
-        self, connections: List[str], max_dt: float = 2.0, binsize: float = 1.0
+        self, connections: list[str], max_dt: float = 2.0, binsize: float = 1.0
     ) -> None:
-        """
-        Calculate and store spike correlations for given connections.
+        """Compute and store spike correlations in `self.corrs`.
 
-        Parameters
-        ----------
-        connections : list of str
-            List of connection names (e.g., ["e2_e1"]).
-        max_dt : float, optional
-            Maximum time lag in units of `tref`.
-        binsize : float, optional
-            Histogram bin size in same units as `tref`.
+        Args:
+            connections: Connection names to compute (e.g., ["e2_e1"]).
+            max_dt: Maximum time lag in units of `tref`.
+            binsize: Histogram bin size.
         """
         self.corrs = {}
         self.dts = np.arange(
@@ -182,19 +145,11 @@ class EISystem:
             )
 
     def calc_stdd(self, max_dt: float = 2.0, binsize: float = 1.0) -> None:
-        """
-        Calculate spike-time delay distribution (STDD) histograms.
+        """Compute and store spike-time delay distributions in `self.stdds`.
 
-        Parameters
-        ----------
-        max_dt : float
-            Maximum delay.
-        binsize : float
-            Histogram bin size.
-
-        Notes
-        -----
-        Results stored in self.stdds.
+        Args:
+            max_dt: Maximum delay.
+            binsize: Histogram bin size.
         """
         dts = np.arange(-max_dt * self.tref, max_dt * self.tref + binsize, binsize)
         stds = get_first_order_stds(self.spks, 4)
@@ -202,14 +157,7 @@ class EISystem:
             self.stdds[conn], _ = np.histogram(stds[idx[0]][idx[1]], bins=dts)
 
     def calc_stdp(self) -> None:
-        """
-        Calculate spike-timing dependent plasticity (STDP) measures for the
-        direkt E-E synapses.
-
-        Notes
-        -----
-        Results stored in self.stdps.
-        """
+        """Compute and store STDP measures for the direct E-E synapses in `self.stdps`."""
         filtered_spks = self.spks[self.spks[:, 1] < 3.0]
         stdp_kernel_args = (-1.0, 1.0, self.tref, self.tref)
         self.stdps = (
@@ -219,19 +167,7 @@ class EISystem:
         )
 
     def transform_effective_weights_21(self, w: float) -> float:
-        """
-        Convert raw weight to effective for connection 2→1.
-
-        Parameters
-        ----------
-        w : float
-            Raw weight value.
-
-        Returns
-        -------
-        float
-            Effective weight.
-        """
+        """Convert raw E-E weight to effective weight for connection 2→1."""
         return EISystem._calc_eff_weight(
             W_ee=w,
             W_ie=self.w_i1_e1,
@@ -241,19 +177,7 @@ class EISystem:
         )
 
     def transform_effective_weights_12(self, w: float) -> float:
-        """
-        Convert raw weight to effective for connection 1→2.
-
-        Parameters
-        ----------
-        w : float
-            Raw weight value.
-
-        Returns
-        -------
-        float
-            Effective weight.
-        """
+        """Convert raw E-E weight to effective weight for connection 1→2."""
         return EISystem._calc_eff_weight(
             W_ee=w,
             W_ie=self.w_i2_e2,
@@ -263,19 +187,7 @@ class EISystem:
         )
 
     def transform_effective_weights_21_inverse(self, w: float) -> float:
-        """
-        Convert effective weight to raw for connection 2→1.
-
-        Parameters
-        ----------
-        w : float
-            Effective weight value.
-
-        Returns
-        -------
-        float
-            Raw weight.
-        """
+        """Convert effective weight back to raw E-E weight for connection 2→1."""
         return EISystem._calc_eff_weight_inverse(
             W_eff=w,
             W_ie=self.w_i1_e1,
@@ -285,19 +197,7 @@ class EISystem:
         )
 
     def transform_effective_weights_12_inverse(self, w: float) -> float:
-        """
-        Convert effective weight to raw for connection 1→2.
-
-        Parameters
-        ----------
-        w : float
-            Effective weight value.
-
-        Returns
-        -------
-        float
-            Raw weight.
-        """
+        """Convert effective weight back to raw E-E weight for connection 1→2."""
         return EISystem._calc_eff_weight_inverse(
             W_eff=w,
             W_ie=self.w_i2_e2,

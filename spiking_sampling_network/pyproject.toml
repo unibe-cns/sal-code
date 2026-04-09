@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "neuralsampling"
-version = "0.1"
+version = "0.2"
 description = "Implementation of the neural sampling model by Buesing et al., 2011"
 readme = "README.md"
 authors = [{ name = "Timo Gierlich", email = "timo.gierlich@unibe.ch" }]
