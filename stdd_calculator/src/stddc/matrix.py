@@ -4,14 +4,26 @@ Defines a class with generators for the creation of the transfer matrix T. The
 T can cope with every kind of PSP shapes.
 """
 
+from typing import Callable, Iterator
+
 import numpy as np
 
 
-def sigma(u, tau):
+def sigma(u: float, tau: float) -> float:
     return 1 / (1 + tau * np.exp(-u))
 
 
-def block_A(zeta_1, PSP, tau_ref, t_max, w_12, w_21, b_1, b_2, tau_syn):
+def block_A(
+    zeta_1: int,
+    PSP: Callable[[int, int, int], float],
+    tau_ref: int,
+    t_max: int,
+    w_12: float,
+    w_21: float,
+    b_1: float,
+    b_2: float,
+    tau_syn: int,
+) -> Iterator[tuple[int, int, float]]:
     for zeta_2 in range(1, tau_ref):
         yield (zeta_2, zeta_2 - 1, 1.0)
 
@@ -27,7 +39,17 @@ def block_A(zeta_1, PSP, tau_ref, t_max, w_12, w_21, b_1, b_2, tau_syn):
     yield (t_max - 1, t_max - 1, res)
 
 
-def block_B(zeta_1, PSP, tau_ref, t_max, w_12, w_21, b_1, b_2, tau_syn):
+def block_B(
+    zeta_1: int,
+    PSP: Callable[[int, int, int], float],
+    tau_ref: int,
+    t_max: int,
+    w_12: float,
+    w_21: float,
+    b_1: float,
+    b_2: float,
+    tau_syn: int,
+) -> Iterator[tuple[int, int, float]]:
     for zeta_2 in range(1, tau_ref):
         res = sigma(b_1 + w_12 * PSP(zeta_2, tau_ref, tau_syn), tau_ref)
         yield (zeta_2, zeta_2 - 1, res)
@@ -46,7 +68,17 @@ def block_B(zeta_1, PSP, tau_ref, t_max, w_12, w_21, b_1, b_2, tau_syn):
     yield (t_max - 1, t_max - 1, res_2)
 
 
-def block_C(zeta_1, PSP, tau_ref, t_max, w_12, w_21, b_1, b_2, tau_syn):
+def block_C(
+    zeta_1: int,
+    PSP: Callable[[int, int, int], float],
+    tau_ref: int,
+    t_max: int,
+    w_12: float,
+    w_21: float,
+    b_1: float,
+    b_2: float,
+    tau_syn: int,
+) -> Iterator[tuple[int, int, float]]:
     for zeta_2 in range(1, tau_ref):
         res = 1 - sigma(b_1 + w_12 * PSP(zeta_2, tau_ref, tau_syn), tau_ref)
         yield (zeta_2, zeta_2 - 1, res)
@@ -65,7 +97,16 @@ def block_C(zeta_1, PSP, tau_ref, t_max, w_12, w_21, b_1, b_2, tau_syn):
     yield (t_max - 1, t_max - 1, res_2)
 
 
-def transition_matrix(PSP, tau_ref, t_max, w_12, w_21, b_1, b_2, tau_syn):
+def transition_matrix(
+    PSP: Callable[[int, int, int], float],
+    tau_ref: int,
+    t_max: int,
+    w_12: float,
+    w_21: float,
+    b_1: float,
+    b_2: float,
+    tau_syn: int,
+) -> Iterator[tuple[int, int, float]]:
     # apply blockmatrix A
     for start_A in range(tau_ref - 1):
         for i, j, A in block_A(

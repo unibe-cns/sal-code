@@ -1,0 +1,95 @@
+bp:
+  params:
+    n_epochs: 100
+    batch_size: 128
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 0.0
+    use_backprop: True
+    use_kp: False
+    use_fa_conv_layers: False
+    use_scfa: False
+
+fa:
+  params:
+    n_epochs: 100
+    batch_size: 128
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 0.0
+    use_backprop: False
+    use_kp: False
+    use_fa_conv_layers: False
+    use_scfa: False
+
+bp_w_fa:
+  params:
+    n_epochs: 100
+    batch_size: 128
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 0.0
+    use_backprop: True
+    use_kp: False
+    use_fa_conv_layers: True
+    use_scfa: False
+
+akrout:
+  params:
+    n_epochs: 100
+    batch_size: 128
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 0.001
+    use_backprop: False
+    use_kp: True
+    use_fa_conv_layers: False
+    use_scfa: False
+
+scfa:
+  params:
+    n_epochs: 100
+    batch_size: 128
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 0.0
+    use_backprop: False
+    use_kp: False
+    use_fa_conv_layers: False
+    use_scfa: True
+
+sal:
+  params:
+    n_epochs: 100
+    batch_size: 128
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 0.0
+    use_backprop: False
+    use_kp: False
+    use_fa_conv_layers: False
+    use_scfa: False
+  sal_params:
+    # reduced n_iterations, len_epoch & len_epoch for shorter test duration
+    n_iterations: 1
+    use_sal: True
+    t_ref: 10
+    len_epoch: 100
+    sal_lr: 0.04
+    batch_size: 1
+
+rdd:
+  params:
+    n_epochs: 100
+    batch_size: 128
+    lr: 0.01
+    momentum: 0.9
+    weight_decay: 0.0
+    use_backprop: False
+    use_kp: False
+    use_fa_conv_layers: False
+    use_scfa: False
+  rdd_params:
+    rdd_time: 15
+    use_rdd: True
+    every_epoch: True

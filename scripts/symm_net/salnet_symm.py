@@ -52,6 +52,9 @@ parser.add_argument("--len_epoch", type=int, default=params["len_epoch"])
 parser.add_argument("--lr", type=float, default=params["sal_lr"])
 parser.add_argument("--tags", type=str)
 parser.add_argument("--group_tags", type=str)
+parser.add_argument(
+    "--output-dir", type=str, default="../../results/symm_net", dest="output_dir"
+)
 args = parser.parse_args()
 
 params["n_epochs"] = args.n_epochs
@@ -95,7 +98,7 @@ def append_metric(scalars, key, value):
 # Run setup
 # ---------------------------
 
-run_dir = create_run_dirs(base_dir="runs", tags=tags)
+run_dir = create_run_dirs(base_dir=args.output_dir, tags=tags)
 
 metrics = {
     "params": params,
