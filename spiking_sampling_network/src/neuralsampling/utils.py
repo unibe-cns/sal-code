@@ -7,6 +7,7 @@ import numba
 import numpy as np
 import numpy.typing as npt
 import yaml
+from scipy.special import xlogy
 
 # declare my own types here
 StrPath: TypeAlias = Path | str
@@ -194,7 +195,7 @@ def calc_dkl(p: npt.NDArray, q: npt.NDArray) -> float:
     """
     Kullback-Leibler divergence
     """
-    return np.sum(p * np.log(p / q))
+    return float(np.sum(xlogy(p, p) - xlogy(p, q)))
 
 
 def ordered_spikes_to_list(
