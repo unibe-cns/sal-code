@@ -1,27 +1,85 @@
 #!/usr/bin/env python3
 
-"""Train a fully connected BM"""
+"""Train a fully connected BM, writing results directly to disk."""
 
-import sys
+import argparse
+from itertools import product
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import yaml
 
 from neuralsampling import utils
 from neuralsampling.network import GradDescent, NeuralSamplerFullyConnected, rect_kernel
 from neuralsampling.stdp_functions import STDPRuler
 
-paramfile_name = sys.argv[1]
-paramfile_stem = Path(paramfile_name).with_suffix("")
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+parser = argparse.ArgumentParser()
+parser.add_argument("paramfile", type=Path, help="Path to a parameter file")
+parser.add_argument("-i", type=int, default=0, help="Parameter sweep index")
+parser.add_argument("-s", type=int, default=0, help="Seed sweep index")
+parser.add_argument(
+    "-o",
+    type=Path,
+    default=Path("../../results/ssn"),
+    help="Output directory (default: <repo_root>/results/ssn)",
+)
+
+args = parser.parse_args()
+
+paramfile_name = args.paramfile
+sweep_id = args.i
+seed_id = args.s
+base_outdir = args.o
+
 params = utils.load_paramfile(paramfile_name)
+
+# Determine output directory from exp_type stored in the params file
+exp_type = params["exp_type"]
+outdir = base_outdir / exp_type
+outdir.mkdir(parents=True, exist_ok=True)
+
+# Save params yaml once per sweep (shared across seeds)
+params_file = outdir / f"{sweep_id:02d}_params.yaml"
+if not params_file.exists():
+    with open(params_file, "w") as f:
+        yaml.dump(params, f)
+#         FIXME: could this lead to race conditions, if executed at the same time??
+
+print(f"sweep: {sweep_id} seed: {seed_id}")
+print(f"output dir: {outdir}")
+
+# ---------------------------------------------------------------------------
+# Seeds
+# ---------------------------------------------------------------------------
+
+# For gathering enouhg stastics, we run the experiment over 5 different
+# target distributions (defined by DISTR_SEEDS) and for each target distribution
+# over 4 different initial parameter configurations (defined by INIT_SEEDS)
+# each combination has a unique seed for the GLM (SIM_SEED).
+DISTR_SEEDS = [4321, 4322, 4323, 4324, 4235]
+INIT_SEEDS = [9002, 9003, 9004, 9005]
+SIM_SEED = 7654
+SEEDS = [
+    [SIM_SEED + i, distr, init]
+    for (i, (distr, init)) in enumerate((product(DISTR_SEEDS, INIT_SEEDS)))
+]
+
+params["seed"]["sim"] = SEEDS[seed_id][0]
+params["seed"]["distr"] = SEEDS[seed_id][1]
+params["seed"]["init"] = SEEDS[seed_id][2]
 
 t_rng = np.random.default_rng(params["seed"]["distr"])
 i_rng = np.random.default_rng(params["seed"]["init"])
 
-# target and initial parameters:
-a = 0.5
-b = 0.5
+# ---------------------------------------------------------------------------
+# Target and initial parameters
+# ---------------------------------------------------------------------------
+
 w_target = (
     2
     * t_rng.beta(
@@ -48,6 +106,10 @@ b_init = i_rng.normal(0.0, params["bias_init"], params["dim"])
 
 params["sim_params"]["psp_kernel"] = rect_kernel
 
+# ---------------------------------------------------------------------------
+# STDP rules: noise the stdp kernel parameter per synapse
+# ---------------------------------------------------------------------------
+
 stdp_rule = STDPRuler.tri_kernel(
     params["dim"],
     params["stdp"]["num_last_spikes"],
@@ -56,7 +118,7 @@ stdp_rule = STDPRuler.tri_kernel(
     params["stdp"]["ws"]["tau_plus"],
     params["stdp"]["ws"]["tau_minus"],
 )
-# atm use only left-right / wake-sleep symmetric kernels
+
 a_forward = utils.draw_trunc_distr(
     i_rng.normal,
     high=params["stdp"]["ws"]["noise"] * 1.5,
@@ -65,6 +127,7 @@ a_forward = utils.draw_trunc_distr(
     kwargs={"loc": 0.0, "scale": params["stdp"]["ws"]["noise"]},
 )
 a_forward = a_forward + params["stdp"]["ws"]["a_plus"]
+a_forward = np.clip(a_forward, 0.0, None)
 
 a_backward = utils.draw_trunc_distr(
     i_rng.normal,
@@ -74,6 +137,7 @@ a_backward = utils.draw_trunc_distr(
     kwargs={"loc": 0.0, "scale": params["stdp"]["ws"]["noise"]},
 )
 a_backward = a_backward + params["stdp"]["ws"]["a_plus"]
+a_backward = np.clip(a_backward, 0.0, None)
 
 stdp_rule.set_forward(a_plus=a_forward, a_minus=a_forward)
 stdp_rule.set_backward(a_plus=a_backward, a_minus=a_backward)
@@ -86,6 +150,7 @@ stdp_rule_sal = STDPRuler.tri_kernel(
     params["stdp"]["sal"]["tau_plus"],
     params["stdp"]["sal"]["tau_minus"],
 )
+
 a_forward = utils.draw_trunc_distr(
     i_rng.normal,
     high=params["stdp"]["ws"]["noise"] * 1.5,
@@ -94,6 +159,7 @@ a_forward = utils.draw_trunc_distr(
     kwargs={"loc": 0.0, "scale": params["stdp"]["ws"]["noise"]},
 )
 a_forward = a_forward + params["stdp"]["ws"]["a_plus"]
+a_forward = np.clip(a_forward, 0.0, None)
 
 a_backward = utils.draw_trunc_distr(
     i_rng.normal,
@@ -103,14 +169,18 @@ a_backward = utils.draw_trunc_distr(
     kwargs={"loc": 0.0, "scale": params["stdp"]["ws"]["noise"]},
 )
 a_backward = a_backward + params["stdp"]["ws"]["a_plus"]
+a_backward = np.clip(a_backward, 0.0, None)
+
 stdp_rule_sal.set_forward(a_plus=-a_forward, a_minus=a_forward)
 stdp_rule_sal.set_backward(a_plus=-a_backward, a_minus=a_backward)
 
+# ---------------------------------------------------------------------------
+# Optimizers and sampler
+# ---------------------------------------------------------------------------
 
 opt_bias = GradDescent(params["lr"]["bias"])
 opt_weight = GradDescent(params["lr"]["weight"])
 opt_symm = GradDescent(params["lr"]["symm"])
-
 
 sampler = NeuralSamplerFullyConnected(
     w_init,
@@ -125,7 +195,12 @@ sampler = NeuralSamplerFullyConnected(
     max_w=params["max_w"],
     max_b=params["max_b"],
     rng_seed=params["seed"]["sim"],
+    weight_decay=params["lr"]["kp"] if "kp" in params["lr"] else 0.0,
 )
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
 
 all_dkl = []
 all_weights = []
@@ -141,8 +216,8 @@ def callback(res, step):
         weights = res["weights"] - res["weights"].T
         upper_half = weights[np.triu_indices(weights.shape[0], k=1)]
         asym = np.var(upper_half)
-        print(f"ASYM {asym:.5f}")
-        print(f"DKL {current_dkl:.5f}")
+        print(f"ASYM {asym:.5f}")  # noqa
+        print(f"DKL {current_dkl:.5f}")  # noqa
         all_distr.append(res["sampled_distr"])
         all_dkl.append(current_dkl)
         all_biases.append(res["biases"])
@@ -159,6 +234,25 @@ sampler.train(
     validation_factor=params["val_factor"],
 )
 
+# ---------------------------------------------------------------------------
+# Save results
+# ---------------------------------------------------------------------------
+
+run_stem = f"{sweep_id:02d}_{seed_id:02d}"
+
+np.savez_compressed(
+    outdir / f"{run_stem}.npz",
+    dkls=np.array(all_dkl, dtype=np.float32),
+    target_distr=np.array(sampler.target_distr, dtype=np.float32),
+    all_distr=np.array(all_distr, dtype=np.float32),
+    all_weights=np.array(all_weights, dtype=np.float32),
+    all_biases=np.array(all_biases, dtype=np.float32),
+    all_asym=np.array(all_asym, dtype=np.float32),
+)
+
+# ---------------------------------------------------------------------------
+# Summarizing figure
+# ---------------------------------------------------------------------------
 
 fig, ax = plt.subplots(6, 1, figsize=(6, 10))
 ax[0].plot(all_dkl)
@@ -184,16 +278,5 @@ utils.plot_distr(
 )
 
 plt.tight_layout()
-
-fig.savefig(f"{paramfile_stem}.png", dpi=300)
-
-
-np.savez_compressed(
-    f"{paramfile_stem}",
-    dkls=np.array(all_dkl, dtype=np.float32),
-    target_distr=np.array(sampler.target_distr, dtype=np.float32),
-    all_distr=np.array(all_distr, dtype=np.float32),
-    all_weights=np.array(all_weights, dtype=np.float32),
-    all_biases=np.array(all_biases, dtype=np.float32),
-    all_asym=np.array(all_asym, dtype=np.float32),
-)
+fig.savefig(outdir / f"{run_stem}.png", dpi=150)
+plt.close(fig)
