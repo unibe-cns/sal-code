@@ -1,3 +1,7 @@
+exp_type: "syn_noise"
+tags: 
+  - "synaptic noise"
+  - "no sal"
 dim: 7
 
 seed:
@@ -17,12 +21,13 @@ sim_params:
 
 num_epochs: 20001
 val_step: 500
-val_factor: 1000
+val_factor: 100
 
 lr:
   bias: 0.01
   weight: 0.01
   symm: 0.0
+  kp: 0.0
 
 dur: 1000
 init_noise: 0.0

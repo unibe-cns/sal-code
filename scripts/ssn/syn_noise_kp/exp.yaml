@@ -1,8 +1,8 @@
-exp_type: "plast_noise"
+exp_type: "syn_noise_kp"
 tags: 
-  - "plasticity noise"
-  - "no sal"
-
+  - "synaptic noise"
+  - "Kolen Pollack"
+  - "kp lr"
 dim: 7
 
 seed:
@@ -21,16 +21,17 @@ sim_params:
   num_last_spikes: 1
 
 num_epochs: 20001
-val_step: 1000
+val_step: 500
 val_factor: 100
 
 lr:
   bias: 0.01
   weight: 0.01
   symm: 0.0
+  kp: 0.00016
 
 dur: 1000
-init_noise: 0.2
+init_noise: 0.0
 weight_init: 0.2
 bias_init: 0.2
 max_w: 2.0
@@ -43,10 +44,10 @@ stdp:
     a_minus: 1.0
     tau_plus: *tref
     tau_minus: *tref
-    noise: 0.05
+    noise: 0.0
   sal:
     a_plus: 1.0
     a_minus: 1.0
     tau_plus: *tref
     tau_minus: *tref
-    noise: 0.05
+    noise: 0.0

@@ -11,7 +11,7 @@ def set_value(dct, keys, val):
         if isinstance(dct, dict) and key in dct:
             dct = dct[key]
         else:
-            raise KeyError(f"{keys} doesn't exist!")
+            raise KeyError(f"{keys} doesn't exist!!")
     if (
         isinstance(dct, dict)
         and keys[-1] in dct
@@ -27,10 +27,13 @@ FNAME = Path("exp.yaml")
 with open(FNAME, "r") as f:
     data = yaml.safe_load(f)
 
-# LR_WS = [0.0005, 0.001, 0.002, 0.004, 0.008]
-# LR_SAL = [0.0005, 0.001, 0.002, 0.004, 0.008]
 STDP_NOISE = [0.0, 0.2, 0.4, 0.6, 0.8]
-for i, (noise,) in enumerate(product(STDP_NOISE)):
+
+for i, (noise,) in enumerate(
+    product(
+        STDP_NOISE,
+    )
+):
     set_value(data, ("stdp", "ws", "noise"), noise)
     set_value(data, ("stdp", "sal", "noise"), noise)
     filename = f"{FNAME.stem}.{i:04d}.yaml"  # noqa

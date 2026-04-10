@@ -1,3 +1,7 @@
+exp_type: "plast_noise_sal"
+tags: 
+  - "plasticity noise"
+  - "with sal"
 dim: 7
 
 seed:
@@ -15,14 +19,14 @@ sim_params:
   tau_syn: *tref
   num_last_spikes: 1
 
-num_epochs: 150001
-val_step: 2000
-val_factor: 1000
+num_epochs: 20001
+val_step: 1000
+val_factor: 100
 
 lr:
-  bias: 0.001
-  weight: 0.001
-  symm: 0.002
+  bias: 0.01
+  weight: 0.01
+  symm: 0.01
 
 dur: 1000
 init_noise: 0.2
@@ -38,10 +42,10 @@ stdp:
     a_minus: 1.0
     tau_plus: *tref
     tau_minus: *tref
-    noise: 0.05
+    noise: 0.5
   sal:
     a_plus: 1.0
     a_minus: 1.0
     tau_plus: *tref
     tau_minus: *tref
-    noise: 0.05
+    noise: 0.5

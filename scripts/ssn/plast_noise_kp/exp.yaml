@@ -1,8 +1,7 @@
-exp_type: "plast_noise"
+exp_type: "plast_noise_kp"
 tags: 
   - "plasticity noise"
-  - "no sal"
-
+  - "Kolen Pollack"
 dim: 7
 
 seed:
@@ -28,6 +27,7 @@ lr:
   bias: 0.01
   weight: 0.01
   symm: 0.0
+  kp: 0.00004
 
 dur: 1000
 init_noise: 0.2
