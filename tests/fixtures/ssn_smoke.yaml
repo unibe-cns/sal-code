@@ -1,9 +1,8 @@
-# Minimal SSN config for smoke testing.
-# Reduced from minimal_working_example.yaml:
-#   - num_epochs: 11 (triggers 2 validations at val_step=5)
-#   - dur: 100 (100 timesteps/epoch instead of 1000)
-#   - val_factor: 10 (shorter validation simulation)
-
+exp_type: "snn_smoke"
+tags: 
+  - "synaptic noise"
+  - "no sal"
+  - "short test"
 dim: 7
 
 seed:
@@ -17,21 +16,22 @@ distr:
 
 sim_params:
   t_ref: &tref
-    50
+    25
   tau_syn: *tref
   num_last_spikes: 1
 
-num_epochs: 11
-val_step: 5
+num_epochs: 101
+val_step: 50
 val_factor: 10
 
 lr:
-  bias: 0.001
-  weight: 0.001
-  symm: 0.002
+  bias: 0.01
+  weight: 0.01
+  symm: 0.0
+  kp: 0.0
 
-dur: 100
-init_noise: 0.2
+dur: 1000
+init_noise: 0.0
 weight_init: 0.2
 bias_init: 0.2
 max_w: 2.0
@@ -44,10 +44,10 @@ stdp:
     a_minus: 1.0
     tau_plus: *tref
     tau_minus: *tref
-    noise: 0.05
+    noise: 0.0
   sal:
     a_plus: 1.0
     a_minus: 1.0
     tau_plus: *tref
     tau_minus: *tref
-    noise: 0.05
+    noise: 0.0

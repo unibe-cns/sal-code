@@ -1,6 +1,7 @@
 """Implementation of the dynamics of RDD layers."""
 
 import numpy as np
+import numpy.typing as npt
 
 from symmnet import (
     RDD_eta,
@@ -20,7 +21,7 @@ from symmnet import (
 )
 
 
-def kappa(x):
+def kappa(x: float | int) -> float:
     """
     Computes the difference of exponentials kernel for synaptic current.
 
@@ -35,7 +36,7 @@ def kappa(x):
     )
 
 
-def get_kappas(n=mem):
+def get_kappas(n: int = mem) -> npt.NDArray:
     """
     Computes the kappa kernel for the last n time steps.
 
@@ -65,7 +66,12 @@ class SpikingFA:
         b_input_size (int, optional): Size of the feedback input (enables RDD).
     """
 
-    def __init__(self, size, f_input_size=None, b_input_size=None):
+    def __init__(
+        self,
+        size: int,
+        f_input_size: int | None = None,
+        b_input_size: int | None = None,
+    ) -> None:
         self.size = size
         self.f_input_size = f_input_size
         self.b_input_size = b_input_size
@@ -87,7 +93,7 @@ class SpikingFA:
 
         self.reset()
 
-    def reset(self):
+    def reset(self) -> None:
         """
         Resets all state variables for the spiking neuron population.
         """
@@ -110,7 +116,12 @@ class SpikingFA:
             self.n_spikes = np.zeros((self.size, 1))
             self.max_u = np.zeros((self.size, 1))
 
-    def set_weights(self, weight=None, bias=None, fb_weight=None):
+    def set_weights(
+        self,
+        weight: npt.NDArray | None = None,
+        bias: npt.NDArray | None = None,
+        fb_weight: npt.NDArray | None = None,
+    ) -> None:
         """
         Sets the feedforward and feedback weights, with normalization.
 
@@ -129,7 +140,12 @@ class SpikingFA:
             if self.fb_weight_std is None:
                 self.fb_weight_std = np.std(self.fb_weight)
 
-    def update(self, f_input=None, b_input=None, driving_input=None):
+    def update(
+        self,
+        f_input: npt.NDArray | None = None,
+        b_input: npt.NDArray | None = None,
+        driving_input: npt.NDArray | None = None,
+    ) -> None:
         """
         Advances the state of the neuron population by one time step.
 
@@ -231,7 +247,7 @@ class SpikingFA:
         # update spike histories
         self.spike_hist = np.concatenate([self.spike_hist[:, 1:], self.fired], axis=1)
 
-    def update_RDD_estimate(self):
+    def update_RDD_estimate(self) -> None:
         """
         Updates the RDD regression parameter estimates for neurons at the end of their RDD window.
         """
@@ -288,7 +304,7 @@ class SpikingFA:
 
         self.R[end_mask] = 0
 
-    def update_fb_weights(self):
+    def update_fb_weights(self) -> None:
         """
         Updates the feedback weights based on the current RDD beta values, if nonzero.
         """

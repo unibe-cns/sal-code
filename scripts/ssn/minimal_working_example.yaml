@@ -1,3 +1,7 @@
+exp_type: "minimal_working_example"
+tags:
+  - "a descriptive tag"
+  - "another descriptive tag"
 dim: 7
 
 seed:

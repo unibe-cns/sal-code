@@ -3,6 +3,7 @@
 """Copy and simplify code form original repo."""
 
 import numpy as np
+import numpy.typing as npt
 from tqdm import tqdm, trange
 
 ####################################
@@ -17,7 +18,7 @@ def correlated_poisson_spike_train(
     simulation_time: float,
     timestep: float,
     seed: int = 42,
-):
+) -> list[npt.NDArray]:
     """Produces a set of Poisson process sampled spikes with a thinning process to achieve correlation
 
     This function creates the desired firing rate as a threshold and draws random numbers (tested against this threshold) to determine spikes.
@@ -57,8 +58,13 @@ def correlated_poisson_spike_train(
 
 
 def random_sample_spike_train(
-    spike_trains, simulation_time, timestep, resample_period, ratio_active, seed=42
-):
+    spike_trains: list[npt.NDArray],
+    simulation_time: float,
+    timestep: float,
+    resample_period: float,
+    ratio_active: float,
+    seed: int = 42,
+) -> list[npt.NDArray]:
     """Randomly samples units from a spike train to be active/inactive. This shifts all spike trains when inactive.
 
     Note, this function expects spike trains to have positive only values.
@@ -98,7 +104,13 @@ def random_sample_spike_train(
     return spike_trains
 
 
-def xpsp_filterer(train, nb_timesteps, timestep, tau_slow, tau_fast):
+def xpsp_filterer(
+    train: npt.NDArray,
+    nb_timesteps: int,
+    timestep: float,
+    tau_slow: float,
+    tau_fast: float,
+) -> npt.NDArray:
     """Convolves a spike train with a double exponential causal XPSP filter
 
     Args:
@@ -127,8 +139,12 @@ def xpsp_filterer(train, nb_timesteps, timestep, tau_slow, tau_fast):
 
 
 def spike_trains_to_xpsps(
-    spike_trains, sim_time, timestep, tau_slow=10.0, tau_fast=3.0
-):
+    spike_trains: list[npt.NDArray],
+    sim_time: float,
+    timestep: float,
+    tau_slow: float = 10.0,
+    tau_fast: float = 3.0,
+) -> npt.NDArray:
     """Converts a list of spike trains into a 2D numpy array of post-synaptic potentials
 
     Assumes that all spikes cause an equivalent shaped fast E/I PSP -- all psps are positive
@@ -153,16 +169,16 @@ def spike_trains_to_xpsps(
 
 
 def lif_dynamics(
-    xpsps,
-    weight_matrix,
-    timestep,
-    tau=20.0,
-    thresh=1.0,
-    rest=0.0,
-    reset=-1.0,
-    drift=0.0,
-    coupling_ratio=1.0,
-):
+    xpsps: npt.NDArray,
+    weight_matrix: npt.NDArray,
+    timestep: float,
+    tau: float = 20.0,
+    thresh: float = 1.0,
+    rest: float = 0.0,
+    reset: float = -1.0,
+    drift: float = 0.0,
+    coupling_ratio: float = 1.0,
+) -> list[npt.NDArray]:
     """Computing leaky integrator spiking neuron dynamics given an incident XPSP and weight matrix
 
     Args:
@@ -214,7 +230,11 @@ def lif_dynamics(
     return spike_times
 
 
-def binary_spike_matrix(spike_trains, sim_time, timestep):
+def binary_spike_matrix(
+    spike_trains: list[npt.NDArray],
+    sim_time: float,
+    timestep: float,
+) -> npt.NDArray:
     """Converts a list of spike trains into a large NxT binary spike matrix
 
     Args:
@@ -241,14 +261,14 @@ def binary_spike_matrix(spike_trains, sim_time, timestep):
 
 
 def stdwi_method(
-    guess_matrix,
-    input_binary_spikes,
-    output_binary_spikes,
-    slow_in_trace,
-    fast_in_trace,
-    learning_rate,
-    decay_weighting,
-):
+    guess_matrix: npt.NDArray,
+    input_binary_spikes: npt.NDArray,
+    output_binary_spikes: npt.NDArray,
+    slow_in_trace: npt.NDArray,
+    fast_in_trace: npt.NDArray,
+    learning_rate: float,
+    decay_weighting: float,
+) -> npt.NDArray:
     """Spike Timing-Dependent based inference of weights
 
     Args:
@@ -289,7 +309,14 @@ def stdwi_method(
     return update_matrix
 
 
-def create_stdwi_trace(prev_trace, binary_spike_matrix, alpha, tau, timestep, alltoall):
+def create_stdwi_trace(
+    prev_trace: npt.NDArray,
+    binary_spike_matrix: npt.NDArray,
+    alpha: float,
+    tau: float,
+    timestep: float,
+    alltoall: bool,
+) -> npt.NDArray:
     """Produces an exponential moving average estimation of firing rate from spike times
 
     Args:
@@ -319,18 +346,18 @@ def create_stdwi_trace(prev_trace, binary_spike_matrix, alpha, tau, timestep, al
 
 
 def apply_stdwi(
-    inp_spks,
-    out_spks,
-    fb_weight,
-    tau_fast,
-    tau_slow,
-    sim_dur,
-    stim_dur,
-    lr,
-    dt,
-    decay_weighting=0.1,
-    a_fast=1.0,
-):
+    inp_spks: list[npt.NDArray],
+    out_spks: list[npt.NDArray],
+    fb_weight: npt.NDArray,
+    tau_fast: float,
+    tau_slow: float,
+    sim_dur: float,
+    stim_dur: float,
+    lr: float,
+    dt: float,
+    decay_weighting: float = 0.1,
+    a_fast: float = 1.0,
+) -> npt.NDArray:
     """My own leaner reimplementation of fitter.stdwi"""
 
     n_in = fb_weight.shape[1]

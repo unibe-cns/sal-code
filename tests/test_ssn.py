@@ -23,7 +23,7 @@ def test_train_bm(tmp_path):
     shutil.copy(FIXTURE_YAML, config)
 
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), str(config)],
+        [sys.executable, str(SCRIPT), str(config), "-o", str(tmp_path)],
         capture_output=True,
         text=True,
     )
@@ -33,5 +33,8 @@ def test_train_bm(tmp_path):
         f"stdout:\n{result.stdout}\n"
         f"stderr:\n{result.stderr}"
     )
-    assert (tmp_path / "ssn_smoke.png").exists(), "result figure not created"
-    assert (tmp_path / "ssn_smoke.npz").exists(), "result npz not created"
+    assert (
+        tmp_path / "snn_smoke" / "00_params.yaml"
+    ).exists(), "simulation parameter file not found"
+    assert (tmp_path / "snn_smoke" / "00_00.png").exists(), "result figure not created"
+    assert (tmp_path / "snn_smoke" / "00_00.npz").exists(), "result npz not created"

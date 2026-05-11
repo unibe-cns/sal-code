@@ -1,88 +1,68 @@
-"""
-Collection of miscellaneous function
-"""
+"""Utility classes for tracking and averaging during network simulation."""
 
 import numpy as np
+import numpy.typing as npt
 
 
-def logistic(x, t_ref):
-    return 1.0 / (1.0 + np.exp(-(x - np.log(t_ref))))
-
-
-def rect_psp(dt, tau_syn):
-    return np.heaviside(dt, 1.0) * np.heaviside(-(dt - tau_syn), 0.0)
-
-
-def exp_stdp_kernel(dt, a, tau):
-    return a * np.heaviside(dt, 0.0) * np.exp(-dt / tau)
-
-
-def time_str(sec):
-    """prints time to go string"""
-    string = ""
-    h = int(sec / 3600)
-    if h > 0:
-        string = str(h) + "h, "
-    if int(sec / 60) > 0:
-        m = int((sec - h * 3600) / 60)
-        string += str(m) + "min and "
-    string += str(int(sec % 60)) + "s"
-    return string
-
-
-def calc_spike_rates(spks, t_pattern, t_ref, num_pattern):
-    spike_rate = []
-    dt_pattern = t_pattern * t_ref
-    len_sim = dt_pattern * num_pattern
-    windows = np.arange(0, len_sim + 1, dt_pattern)
-    for beg, end in zip(windows[:-1], windows[1:]):
-        spks_window = np.array(spks[(spks >= beg) & (spks < end)])
-        spike_rate.append(len(spks_window) / t_pattern)
-    return np.array(spike_rate)
-
-
-# taken directly from Laura
 class Tracker:
-    """
-    Tracks/records changes in 'target' array. Records 'length'*'compress_len'
-    samples, compressed (averaged) into 'length' samples. The result is stored
-    in 'data'. Note that the first value in the 'data' is already the average
-    of multiple values of the target array. If 'compress_len' is not 1 the
-    initial value of 'target' is therefore not equal to the first entry in 'data'.
-    After recording call finalize to also add the remaining data in buffer to
-    'data' (finish the last compression).
+    """Records a target array over time, compressing samples by averaging.
+
+    Records ``length * compress_len`` raw samples, compressed (averaged) into
+    ``length`` stored entries in ``data``. The first entry in ``data`` is
+    already an average over ``compress_len`` values, so the initial value of
+    ``target`` does not generally equal ``data[0]`` when ``compress_len > 1``.
+    Call ``finalize()`` after the simulation to flush any remaining buffered
+    data into the last entry.
+
+    Attributes:
+        target: Reference to the array being tracked (updated in-place externally).
+        data: Stored compressed samples, shape ``(length, *target.shape)``.
     """
 
-    def __init__(self, length, target, compress_len):
+    def __init__(self, length: int, target: npt.NDArray, compress_len: int) -> None:
+        """Args:
+        length: Number of compressed samples to store.
+        target: Array to track (held by reference).
+        compress_len: Number of raw samples averaged into one stored entry.
+        """
         self.target = target
         self.data = np.zeros(tuple([length]) + target.shape, dtype=np.float32)
         self.index = 0
         self.buffer = np.zeros(target.shape)
         self.din = compress_len
 
-    def record(self):
+    def record(self) -> None:
+        """Accumulate the current target value; flush to data every compress_len calls."""
         self.buffer += self.target
         if (self.index + 1) % self.din == 0:
             self.data[int(self.index / self.din), :] = self.buffer / self.din
             self.buffer.fill(0)
         self.index += 1
 
-    def finalize(self):
-        """fill last data point with average of remaining target data in buffer."""
+    def finalize(self) -> None:
+        """Flush any remaining buffered samples into the last data entry."""
         n_buffer = self.index % self.din
         if n_buffer > 0:
             self.data[int(self.index / self.din), :] = self.buffer / n_buffer
 
 
 class SpikeTracker:
-    """
-    Tracks spikes during the simulation. Uses a similar concept as the normal
-    Tracker, i.e. records the mean firing rate of a neuron per compression
-    interval.
-    Unlike the other tracker, this one belongs to the layer.
+    """Tracks mean spike rates per neuron during simulation.
+
+    Similar in concept to ``Tracker`` but records spikes as they occur rather
+    than sampling a continuous array. Belongs to a layer rather than the
+    network. Must be initialized via ``init_tracker`` before recording, because
+    ``length`` and ``compress_len`` are not known at construction time.
+
+    Attributes:
+        mean_rates: Accumulated mean firing rates, shape ``(length, N_nrns)``.
     """
 
-    def __init__(self, N_nrns, t_ref):
+    def __init__(self, N_nrns: int, t_ref: float) -> None:
+        """Args:
+        N_nrns: Number of neurons to track.
+        t_ref: Refractory period (used to convert spike counts to rates).
+        """
         self.N_nrns = N_nrns
         self.t_ref = t_ref
         self.idx = 0  # index of the sample
@@ -90,22 +70,36 @@ class SpikeTracker:
         self.mean_rates = None
         self.buffer = np.zeros(N_nrns)
 
-    def init_tracker(self, length, compress_len):
-        """actually initialize the tracker!
+    def init_tracker(self, length: int, compress_len: int) -> None:
+        """Allocate storage. Call this before starting the simulation.
 
-        I do it like this because the other trackers are just initialized in
-        Net.run, therefore when initializing this class, length and compress_len
-        are not known yet!
+        Args:
+            length: Number of compressed samples to store.
+            compress_len: Number of time steps per stored sample.
         """
         self.index = 0
         self.din = compress_len
         self.mean_rates = np.zeros((length, self.N_nrns), dtype=np.float32)
 
-    def record(self, nrn_id, t):
+    def record(self, nrn_id: int, t: float) -> None:
+        """Register a spike for neuron ``nrn_id`` at time ``t``.
+
+        Args:
+            nrn_id: Index of the spiking neuron.
+            t: Current simulation time step.
+        """
         idx = int(t // self.din)  # find out to which "sample" the spike belongs
         self.mean_rates[idx, nrn_id] += 1.0
 
-    def finalize(self, t_last):
+    def finalize(self, t_last: float) -> npt.NDArray:
+        """Convert spike counts to rates and return the result.
+
+        Args:
+            t_last: Last simulation time step (used to handle partial final sample).
+
+        Returns:
+            Mean firing rates array of shape ``(length, N_nrns)``.
+        """
         # check if the last sample was full or not!
         if (t_last % self.din) == 0:
             #  convert spike rate of full samples to units of t_ref^-1
@@ -118,93 +112,22 @@ class SpikeTracker:
         return self.mean_rates
 
 
-class RunResult(dict):
-    """Collection of tracked data during a network run
+class MovingAverage:
+    """Online moving average over a fixed-size window.
 
-    Basically a subclass of a dictionary...
-    (inspired by https://github.com/scipy/scipy/blob/v1.8.1/scipy/optimize/_optimize.py#L84-L140)  # noqa
+    Maintains a running average of a 1-D array using a circular buffer of size
+    ``stacksize``. During the initial fill phase (fewer than ``stacksize``
+    updates), uses a cumulative average instead.
 
-    # TODO: Docstring
+    Attributes:
+        val: Current moving-average estimate.
     """
 
-    def __getattr__(self, name):
-        try:
-            return self[name]
-        except KeyError as e:
-            raise AttributeError(name) from e
-
-    __setattr__ = dict.__setitem__
-    __delattr__ = dict.__delitem__
-
-    def __repr__(self):
-        if self.keys():
-            m = max(map(len, list(self.keys()))) + 1
-            return "\n".join(
-                [k.rjust(m) + ": " + repr(v) for k, v in sorted(self.items())]
-            )
-        else:
-            return self.__class__.__name__ + "()"
-
-    def __dir__(self):
-        return list(self.keys())
-
-    def get_rec_quant(self, quantity: str, layer: int, neuron_ids="all"):
-        """Return the recorded value of a quantity
-
-        layer must an integer: 1 for the first layer, and so on.
-        neuron_ids can be 'all', than all neurons in the layer are passed, or
-        a method to index a numpy array (np.s_ or np.array([1, 2]) or an integer)
+    def __init__(self, val: npt.NDArray, stacksize: int) -> None:
+        """Args:
+        val: Initial value; also determines the array shape and dtype.
+        stacksize: Number of past values to average over.
         """
-        if "rec_quants" not in self.keys():
-            raise KeyError("No contineous quantities recorded!")
-
-        layer_data = self["rec_quants"][layer - 1]
-        if quantity not in layer_data:
-            raise KeyError(f"{quantity} was not recorded in layer {layer}!")
-
-        if neuron_ids == "all":
-            res = layer_data[quantity].data
-        else:
-            res = layer_data[quantity].data[:, neuron_ids]
-
-        # make sure that all arrays have same dimensions
-        # (would be one-dim if neuron_ids is an integer)
-        if len(res.shape) == 1:
-            res = np.expand_dims(res, axis=1)
-
-        return res
-
-    def get_spks(self, nrn_type: str, layer: int, neuron_ids="all"):
-        """
-        neuron_ids can be an integer or a slice
-        layer: 0 for input layer, ...
-        """
-        assert nrn_type in ["pyr", "inn", "input"]
-
-        if nrn_type == "input":
-            if neuron_ids == "all":
-                return self["input_spikes"]
-            elif type(neuron_ids) is int:
-                return self["input_spikes"][slice(neuron_ids, neuron_ids + 1)]
-            else:
-                return self["input_spikes"][neuron_ids]
-
-        sel = nrn_type + "_spikes"
-        if neuron_ids == "all":
-            res = self[sel][layer - 1]
-        elif type(neuron_ids) is int:
-            # this to make sure that a list is returned!
-            res = self[sel][layer - 1][slice(neuron_ids, neuron_ids + 1)]
-        else:
-            res = self[sel][layer - 1][neuron_ids]
-
-        return res
-
-
-class MovingAverage:
-    """docstring for MovingAverage."""
-
-    def __init__(self, val, stacksize: int):
         self.val = val.copy()
         self.stack = np.zeros((stacksize, len(val)), dtype=val.dtype)
         self.stack[0] = self.val[:]
@@ -212,7 +135,12 @@ class MovingAverage:
         self.num_elements = 1
         self.i = 1  # stack index of element to be changed in next time step
 
-    def move(self, new_val):
+    def move(self, new_val: npt.NDArray) -> None:
+        """Update the moving average with a new observation.
+
+        Args:
+            new_val: New array value to incorporate.
+        """
         # stack fills up at the beginning
         if self.num_elements < self.stacksize:
             self.num_elements += 1

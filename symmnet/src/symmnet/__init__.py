@@ -37,3 +37,6 @@ CLASSIFICATION_LAYER_SIZES = [1600, 384, 192, 10]
 
 from .conv_net import ConvNet  # noqa
 from .rdd_net import RDDNet  # noqa
+from .sal_net import SALNet  # noqa
+
+__version__ = "0.2"

@@ -1,50 +1,91 @@
 #!/usr/bin/env python3
 
-"""My quick reference implementation to check why the spike statistics are so wierd"""
+"""Spiking microcircuit model: InputLayer, Layer, OutputLayer, and Network."""
 
 import time
 from itertools import repeat
-from typing import Any, Optional, Union
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 
 from .utils import MovingAverage, Tracker
 
-# TODO Declare all member in __slots__
-
-# TODO Declare my own type aliases:
 AllSpikes = list[list[float]]
 WeightsList = list[dict[str, npt.ArrayLike]]
 
 
 def rect_psp(dt: npt.NDArray, tau_syn: float) -> npt.NDArray:
+    """Rectangular post-synaptic potential kernel.
+
+    Returns 1 if ``0 <= dt < tau_syn``, 0 otherwise.
+
+    Args:
+        dt: Time since pre-synaptic spike.
+        tau_syn: Synaptic time constant (width of the rectangular window).
+
+    Returns:
+        Binary array with 1 inside the window and 0 outside.
+    """
     return np.heaviside(dt, 1.0) * np.heaviside(-(dt - tau_syn), 0.0)
 
 
 def logistic(u: npt.NDArray, t_ref: float) -> npt.NDArray:
+    """Logistic activation function mapping membrane potential to firing probability.
+
+    Args:
+        u: Membrane potential array.
+        t_ref: Refractory period, sets the threshold via ``log(t_ref)``.
+
+    Returns:
+        Firing probability array, same shape as ``u``.
+    """
     return 1.0 / (1.0 + np.exp(-(u - np.log(t_ref))))
 
 
 def exp_stdp_kernel(dt: npt.NDArray, a: float, tau: float) -> npt.NDArray:
+    """Exponential STDP kernel.
+
+    Returns ``a * exp(-dt / tau)`` for ``dt >= 0``, 0 otherwise.
+
+    Args:
+        dt: Spike timing difference (post minus pre).
+        a: Amplitude of the kernel.
+        tau: Decay time constant.
+
+    Returns:
+        STDP kernel values, same shape as ``dt``.
+    """
     return a * np.heaviside(dt, 0.0) * np.exp(-dt / tau)
 
 
-def loss_func(out: npt.NDArray, tgt: Union[npt.NDArray, float]):
+def loss_func(out: npt.NDArray, tgt: npt.NDArray | float) -> float:
+    """Mean squared error loss.
+
+    Args:
+        out: Network output array.
+        tgt: Target array or scalar.
+
+    Returns:
+        Scalar MSE loss.
+    """
     return np.sum((out - tgt) ** 2) / len(out)
 
 
 class InputLayer:
-    """(Virtual) input layer.
-
-    Turns an input voltage into spike trains that are fed into the first layer."""
+    """Virtual input layer that converts an input voltage into Poisson spike trains."""
 
     def __init__(
         self,
         dims: int,
-        params: dict,
+        params: dict[str, Any],
         rng: np.random.Generator,
-    ):
+    ) -> None:
+        """Args:
+        dims: Number of input neurons.
+        params: Network parameter dict (requires ``n_last_spks``, ``size_moving_average``, ``t_ref``).
+        rng: Random number generator for spike sampling.
+        """
         self.dims = dims
         self.last_spks = np.full((dims, params["n_last_spks"]), -np.inf)
         self.all_spks: list[list[float]] = [[] for i in range(dims)]
@@ -57,15 +98,30 @@ class InputLayer:
 
         self.set_params(params)
 
-    def set_params(self, params):
+    def set_params(self, params: dict[str, Any]) -> None:
+        """Load ``t_ref`` and ``n_last_spks`` from the parameter dict.
+
+        Args:
+            params: Network parameter dict.
+        """
         self.t_ref = params["t_ref"]
         self.n_last_spks = params["n_last_spks"]
 
-    def update_mempot(self, u_in: npt.NDArray):
+    def update_mempot(self, u_in: npt.NDArray) -> None:
+        """Set the input voltage and update its moving average.
+
+        Args:
+            u_in: New input voltage array.
+        """
         self.u_in[:] = u_in
         self.u_in_av.move(self.u_in)
 
-    def update_spks(self, t: float):
+    def update_spks(self, t: float) -> None:
+        """Sample spikes stochastically from the logistic activation at time ``t``.
+
+        Args:
+            t: Current simulation time step.
+        """
         self.r_in = logistic(self.u_in, self.t_ref)
         random_vals = self.rng.random(self.dims)
         for i in np.nonzero(random_vals < self.r_in)[0]:
@@ -76,26 +132,44 @@ class InputLayer:
                 self.last_spks[i, -1] = t
                 self.mean_rates_buffer[i] += 1.0
 
-    def calc_rates_pattern(self, t_pattern):
+    def calc_rates_pattern(self, t_pattern: float) -> None:
+        """Append mean spike rates for the current pattern and reset the buffer.
+
+        Args:
+            t_pattern: Duration of the current pattern in time steps.
+        """
         self.mean_rates_pattern.append(self.mean_rates_buffer / t_pattern)
         self.mean_rates_buffer = np.zeros(self.dims)
 
-    def get_all_spks(self):
+    def get_all_spks(self) -> dict[str, list[list[float]]]:
+        """Return all recorded spike times.
+
+        Returns:
+            Dict with key ``"inp"`` mapping to a list of per-neuron spike-time lists.
+        """
         return {"inp": self.all_spks}
 
 
 class Layer:
-    """Normal hidden layer with pyramidal and interneuron"""
+    """Hidden cortical microcircuit layer with pyramidal neurons and interneurons."""
 
     def __init__(
         self,
         n_pyr: int,
         n_in: int,
         n_next: int,
-        params: dict,
+        params: dict[str, Any],
         layer_id: int,
         rng: np.random.Generator,
-    ):
+    ) -> None:
+        """Args:
+        n_pyr: Number of pyramidal neurons.
+        n_in: Number of neurons in the previous (input-side) layer.
+        n_next: Number of neurons in the next layer.
+        params: Network parameter dict.
+        layer_id: 1-based index of this layer (used to index learning rates).
+        rng: Random number generator for spike sampling.
+        """
         self.N_PYR = n_pyr
         self.N_IN = n_in
         self.N_NEXT = n_next
@@ -134,8 +208,12 @@ class Layer:
 
         self.set_params(params)
 
-    def set_params(self, params: dict):
-        # TODO: replace all constants by CAPITAL LETTERS!
+    def set_params(self, params: dict[str, Any]) -> None:
+        """Load synaptic and plasticity parameters from the parameter dict.
+
+        Args:
+            params: Network parameter dict.
+        """
         self.n_last_spks = params["n_last_spks"]
         self.t_ref = params["t_ref"]
         self.tau_syn = params["tau_syn"]
@@ -147,7 +225,13 @@ class Layer:
         self.lr_up = params["lr"][self.LAYER_ID - 1]["up"]
         self.lr_down = params["lr"][self.LAYER_ID - 1]["down"]
 
-    def set_bias(self, bias: npt.ArrayLike, bias_next: npt.ArrayLike):
+    def set_bias(self, bias: npt.ArrayLike, bias_next: npt.ArrayLike) -> None:
+        """Set biases for the pyramidal and interneuron populations.
+
+        Args:
+            bias: Bias vector for pyramidal neurons.
+            bias_next: Bias vector for interneurons.
+        """
         np.copyto(dst=self.b_pyr, src=bias)
         np.copyto(dst=self.b_inn, src=bias_next)
 
@@ -156,11 +240,19 @@ class Layer:
 
     def set_weights(
         self,
-        w_up: Optional[npt.ArrayLike] = None,
-        w_down: Optional[npt.ArrayLike] = None,
-        w_pi: Optional[npt.ArrayLike] = None,
-        w_ip: Optional[npt.ArrayLike] = None,
-    ):
+        w_up: npt.ArrayLike | None = None,
+        w_down: npt.ArrayLike | None = None,
+        w_pi: npt.ArrayLike | None = None,
+        w_ip: npt.ArrayLike | None = None,
+    ) -> None:
+        """Copy provided weight matrices in-place; ``None`` arguments are skipped.
+
+        Args:
+            w_up: Bottom-up weights, shape ``(N_PYR, N_IN)``.
+            w_down: Top-down feedback weights, shape ``(N_PYR, N_NEXT)``.
+            w_pi: Pyramidal-to-interneuron weights, shape ``(N_PYR, N_NEXT)``.
+            w_ip: Interneuron-to-pyramidal weights, shape ``(N_NEXT, N_PYR)``.
+        """
         if w_up is not None:
             np.copyto(src=w_up, dst=self.w_up)
         if w_down is not None:
@@ -171,6 +263,11 @@ class Layer:
             np.copyto(src=w_ip, dst=self.w_ip)
 
     def get_weights(self) -> dict[str, npt.NDArray]:
+        """Return copies of all weight matrices.
+
+        Returns:
+            Dict with keys ``"w_up"``, ``"w_down"``, ``"w_ip"``, ``"w_pi"``.
+        """
         return {
             "w_up": self.w_up.copy(),
             "w_down": self.w_down.copy(),
@@ -178,12 +275,23 @@ class Layer:
             "w_pi": self.w_pi.copy(),
         }
 
-    def set_sps(self, w_up_next: npt.NDArray):
-        # is it ok to just copy the weights by reference (no deep copy?)
+    def set_sps(self, w_up_next: npt.NDArray) -> None:
+        """Initialize symmetric plasticity schedule (SPS) weights from the next layer's ``w_up``.
+
+        Sets ``w_ip = w_up_next`` and ``w_pi = -w_down``.
+
+        Args:
+            w_up_next: Bottom-up weight matrix of the next layer.
+        """
         self.w_ip[:, :] = w_up_next
         self.w_pi[:, :] = -self.w_down
 
-    def update_pyr_spks(self, t: float):
+    def update_pyr_spks(self, t: float) -> None:
+        """Sample pyramidal neuron spikes stochastically at time ``t``.
+
+        Args:
+            t: Current simulation time step.
+        """
         r_pyr = logistic(self.u_pyr, self.t_ref)
         random_vals = self.rng.random(self.N_PYR)
         for i in np.nonzero(random_vals < r_pyr)[0]:
@@ -194,7 +302,12 @@ class Layer:
                 self.last_spks_pyr[i, -1] = t
                 self.rates_buffer_pyr[i] += 1.0
 
-    def update_inn_spks(self, t: float):
+    def update_inn_spks(self, t: float) -> None:
+        """Sample interneuron spikes stochastically at time ``t``.
+
+        Args:
+            t: Current simulation time step.
+        """
         r_inn = logistic(self.u_inn, self.t_ref)
         random_vals = self.rng.random(self.N_NEXT)
         for i in np.nonzero(random_vals < r_inn)[0]:
@@ -205,11 +318,21 @@ class Layer:
                 self.last_spks_inn[i, -1] = t
                 self.rates_buffer_inn[i] += 1.0
 
-    def update_spks(self, t: float):
+    def update_spks(self, t: float) -> None:
+        """Update spikes for both pyramidal and interneuron populations.
+
+        Args:
+            t: Current simulation time step.
+        """
         self.update_pyr_spks(t)
         self.update_inn_spks(t)
 
-    def calc_rates_pattern(self, t_pattern: float):
+    def calc_rates_pattern(self, t_pattern: float) -> None:
+        """Append mean rates for the current pattern and reset spike buffers.
+
+        Args:
+            t_pattern: Duration of the current pattern in time steps.
+        """
         self.rates_pattern_pyr.append(self.rates_buffer_pyr / t_pattern)
         self.rates_buffer_pyr.fill(0.0)
         self.rates_pattern_inn.append(self.rates_buffer_inn / t_pattern)
@@ -218,6 +341,16 @@ class Layer:
     def dendritic_voltages(
         self, t: float, last_spks: npt.NDArray, weight: npt.NDArray
     ) -> npt.NDArray:
+        """Compute weighted sum of rectangular PSPs from a spike history.
+
+        Args:
+            t: Current simulation time step.
+            last_spks: Recent spike times, shape ``(n_pre, n_last_spks)``.
+            weight: Synaptic weight matrix, shape ``(n_post, n_pre)``.
+
+        Returns:
+            Dendritic voltage contribution, shape ``(n_post,)``.
+        """
         psps = np.sum(rect_psp(t - last_spks, self.tau_syn), axis=1)
         return np.dot(weight, psps)
 
@@ -226,7 +359,14 @@ class Layer:
         t: float,
         last_spks_in: npt.NDArray,
         last_spks_next: npt.NDArray,
-    ):
+    ) -> None:
+        """Update pyramidal membrane potential from basal and apical compartments.
+
+        Args:
+            t: Current simulation time step.
+            last_spks_in: Recent spike times of the previous layer.
+            last_spks_next: Recent spike times of the next layer's pyramidal neurons.
+        """
         self.v_bas[:] = self.dendritic_voltages(t, last_spks_in, self.w_up)
         self.v_api[:] = self.dendritic_voltages(
             t, last_spks_next, self.w_down
@@ -237,25 +377,49 @@ class Layer:
         self.u_pyr_av.move(self.u_pyr)
         self.v_bas_av.move(self.v_bas)
 
-    def update_inn_mempot(self, t: float):
+    def update_inn_mempot(self, t: float) -> None:
+        """Update interneuron membrane potential from pyramidal spikes.
+
+        Args:
+            t: Current simulation time step.
+        """
         self.u_inn[:] = self.b_inn + self.dendritic_voltages(
             t, self.last_spks_pyr, self.w_ip
         )
 
     def update_mempot(
         self, t: float, last_spks_in: npt.NDArray, last_spks_next: npt.NDArray
-    ):
+    ) -> None:
+        """Update membrane potentials for pyramidal and interneuron populations.
+
+        Args:
+            t: Current simulation time step.
+            last_spks_in: Recent spike times of the previous layer.
+            last_spks_next: Recent spike times of the next layer's pyramidal neurons.
+        """
         self.update_pyr_mempot(t, last_spks_in, last_spks_next)
         self.update_inn_mempot(t)
 
-    def plasticity_up(self, t: float, last_spks_in: npt.NDArray):
+    def plasticity_up(self, t: float, last_spks_in: npt.NDArray) -> None:
+        """Apply RDD-based upward weight update.
+
+        Args:
+            t: Current simulation time step.
+            last_spks_in: Recent spike times of the previous layer.
+        """
         now_spks_in = np.where(last_spks_in[:, -1] == t - 1, 1, 0)
         r_bas_hat = logistic(self.v_bas_av.val + self.b_pyr, self.t_ref)
         r_pyr_hat = logistic(self.u_pyr_av.val, self.t_ref)
         delta_up = np.outer(r_pyr_hat - r_bas_hat, now_spks_in)
         self.w_up[:, :] += self.lr_up * delta_up
 
-    def plasticity_down(self, t: float, last_spks_next: npt.NDArray):
+    def plasticity_down(self, t: float, last_spks_next: npt.NDArray) -> None:
+        """Apply STDP-based downward weight update.
+
+        Args:
+            t: Current simulation time step.
+            last_spks_next: Recent spike times of the next layer's pyramidal neurons.
+        """
         self.stdp.fill(0.0)
 
         post_spk_idx = np.array(np.nonzero(self.last_spks_pyr == t))
@@ -282,27 +446,41 @@ class Layer:
 
         self.w_down[:, :] += self.lr_down * self.stdp
 
-    def copybackprob(self, w_up_next: npt.NDArray):
+    def copybackprob(self, w_up_next: npt.NDArray) -> None:
+        """Set ``w_down`` to the transpose of the next layer's ``w_up`` (copy-back propagation).
+
+        Args:
+            w_up_next: Bottom-up weight matrix of the next layer.
+        """
         self.w_down[:, :] = w_up_next.T
 
-    def get_all_spks(self):
+    def get_all_spks(self) -> dict[str, list[list[float]]]:
+        """Return all recorded spike times for both populations.
+
+        Returns:
+            Dict with keys ``"pyr"`` and ``"inn"``, each a list of per-neuron spike-time lists.
+        """
         return {"pyr": self.all_spks_pyr, "inn": self.all_spks_inn}
 
 
 class OutputLayer:
-    """Output Layer
-
-    # TODO:
-    """
+    """Output cortical microcircuit layer with nudging via a target signal."""
 
     def __init__(
         self,
         n_out: int,
         n_in: int,
-        params: dict,
+        params: dict[str, Any],
         layer_id: int,
         rng: np.random.Generator,
-    ):
+    ) -> None:
+        """Args:
+        n_out: Number of output neurons.
+        n_in: Number of neurons in the previous layer.
+        params: Network parameter dict.
+        layer_id: 1-based index of this layer (used to index learning rates).
+        rng: Random number generator for spike sampling.
+        """
         self.N_OUT = n_out
         self.N_IN = n_in
         self.LAYER_ID = layer_id
@@ -333,27 +511,52 @@ class OutputLayer:
 
         self.set_params(params)
 
-    def set_params(self, params: dict):
+    def set_params(self, params: dict[str, Any]) -> None:
+        """Load synaptic and plasticity parameters from the parameter dict.
+
+        Args:
+            params: Network parameter dict.
+        """
         self.n_last_spks = params["n_last_spks"]
         self.t_ref = params["t_ref"]
         self.tau_syn = params["tau_syn"]
         self.lam_nudge = params["lambda_nudge"]
         self.lr_up = params["lr"][self.LAYER_ID - 1]["up"]
 
-    def set_bias(self, bias: npt.ArrayLike):
+    def set_bias(self, bias: npt.ArrayLike) -> None:
+        """Set the bias for the output population.
+
+        Args:
+            bias: Bias vector for output neurons.
+        """
         np.copyto(dst=self.b_pyr, src=bias)
 
     def set_weights_random(self):
         raise NotImplementedError
 
-    def set_weights(self, w_up: Optional[npt.ArrayLike] = None):
+    def set_weights(self, w_up: npt.ArrayLike | None = None) -> None:
+        """Copy ``w_up`` in-place if provided.
+
+        Args:
+            w_up: Bottom-up weights, shape ``(N_OUT, N_IN)``.
+        """
         if w_up is not None:
             np.copyto(dst=self.w_up, src=w_up)
 
     def get_weights(self) -> dict[str, npt.NDArray]:
+        """Return a copy of the bottom-up weight matrix.
+
+        Returns:
+            Dict with key ``"up"`` containing a copy of ``w_up``.
+        """
         return {"up": self.w_up.copy()}
 
-    def update_spks(self, t: float):
+    def update_spks(self, t: float) -> None:
+        """Sample output neuron spikes stochastically at time ``t``.
+
+        Args:
+            t: Current simulation time step.
+        """
         r_pyr = logistic(self.u_pyr, self.t_ref)
         random_vals = self.rng.random(self.N_OUT)
         for i in np.nonzero(random_vals < r_pyr)[0]:
@@ -364,19 +567,44 @@ class OutputLayer:
                 self.last_spks_pyr[i, -1] = t
                 self.rates_buffer_pyr[i] += 1.0
 
-    def calc_rates_pattern(self, t_pattern: float):
+    def calc_rates_pattern(self, t_pattern: float) -> None:
+        """Append mean rates for the current pattern and reset the spike buffer.
+
+        Args:
+            t_pattern: Duration of the current pattern in time steps.
+        """
         self.rates_pattern_pyr.append(self.rates_buffer_pyr / t_pattern)
         self.rates_buffer_pyr.fill(0.0)
 
     def dendritic_voltages(
         self, t: float, last_spks: npt.NDArray, weight: npt.NDArray
     ) -> npt.NDArray:
+        """Compute weighted sum of rectangular PSPs from a spike history.
+
+        Args:
+            t: Current simulation time step.
+            last_spks: Recent spike times, shape ``(n_pre, n_last_spks)``.
+            weight: Synaptic weight matrix, shape ``(n_post, n_pre)``.
+
+        Returns:
+            Dendritic voltage contribution, shape ``(n_post,)``.
+        """
         psps = np.sum(rect_psp(t - last_spks, self.tau_syn), axis=1)
         return np.dot(weight, psps)
 
     def update_mempot(
-        self, t: float, last_spks_in: npt.NDArray, u_tgt: Optional[npt.NDArray]
-    ):
+        self, t: float, last_spks_in: npt.NDArray, u_tgt: npt.NDArray | None
+    ) -> None:
+        """Update output membrane potential, optionally with target nudging.
+
+        When ``u_tgt`` is not ``None``, the nudge compartment shifts the membrane
+        potential towards the target via ``lam_nudge``.
+
+        Args:
+            t: Current simulation time step.
+            last_spks_in: Recent spike times of the previous layer.
+            u_tgt: Target membrane potential, or ``None`` during free (validation) phases.
+        """
         self.v_bas[:] = self.dendritic_voltages(t, last_spks_in, self.w_up)
         if u_tgt is not None:
             self.v_nudge[:] = u_tgt - self.v_bas_av.val - self.b_pyr
@@ -389,24 +617,37 @@ class OutputLayer:
         self.u_pyr_av.move(self.u_pyr)
         self.u_tgt_av.move(self.u_tgt)
 
-    def plasticity_up(self, t: float, last_spks_in: npt.NDArray):
+    def plasticity_up(self, t: float, last_spks_in: npt.NDArray) -> None:
+        """Apply RDD-based upward weight update.
+
+        Args:
+            t: Current simulation time step.
+            last_spks_in: Recent spike times of the previous layer.
+        """
         now_spks_in = np.where(last_spks_in[:, -1] == t - 1, 1, 0)
         r_bas_hat = logistic(self.v_bas_av.val + self.b_pyr, self.t_ref)
         r_pyr_hat = logistic(self.u_pyr_av.val, self.t_ref)
         delta_up = np.outer(r_pyr_hat - r_bas_hat, now_spks_in)
         self.w_up[:, :] += self.lr_up * delta_up
 
-    def get_all_spks(self) -> dict[str, list]:
+    def get_all_spks(self) -> dict[str, list[list[float]]]:
+        """Return all recorded spike times for the output population.
+
+        Returns:
+            Dict with key ``"pyr"`` mapping to a list of per-neuron spike-time lists.
+        """
         return {"pyr": self.all_spks_pyr}
 
 
 class Network:
-    """Network of layered cortical microcircuits
+    """Layered network of cortical microcircuits (InputLayer → Layer... → OutputLayer)."""
 
-    # TODO:
-    """
-
-    def __init__(self, params: dict, poisson_seed: int) -> None:
+    def __init__(self, params: dict[str, Any], poisson_seed: int) -> None:
+        """Args:
+        params: Network parameter dict (requires ``dims``, ``learning_lag``, ``t_ref``,
+            ``lambda_api``, and all layer-level params).
+        poisson_seed: Seed for the shared Poisson random number generator.
+        """
         self.dims: list = params["dims"]
         self.n_dims: int = len(self.dims)
         self.len_learning_lag: int = params["learning_lag"]
@@ -442,6 +683,11 @@ class Network:
         self.t = 0.0
 
     def set_weights(self, new_weights: WeightsList) -> None:
+        """Set weights for all non-input layers from a ``WeightsList``.
+
+        Args:
+            new_weights: List of weight dicts, one per non-input layer.
+        """
         assert (
             len(new_weights) == self.n_dims - 1
         ), f"new_weights should have {self.n_dims - 1} entries, but has {len(new_weights)}."  # noqa
@@ -449,9 +695,19 @@ class Network:
             self.layers[i].set_weights(**new_weights[i - 1])
 
     def get_weights(self) -> WeightsList:
+        """Return weight copies from all non-input layers.
+
+        Returns:
+            List of weight dicts, one per non-input layer.
+        """
         return [layer.get_weights() for layer in self.layers[1:]]
 
     def set_bias(self, new_bias: list[npt.ArrayLike]) -> None:
+        """Set biases for all non-input layers.
+
+        Args:
+            new_bias: List of bias arrays, one per non-input layer.
+        """
         assert (
             len(new_bias) == self.n_dims - 1
         ), f"new_bias should have {self.n_dims - 1} entries, but has {len(new_bias)}."  # noqa
@@ -459,34 +715,60 @@ class Network:
             self.layers[i].set_bias(new_bias[i - 1], new_bias[i])
         self.layers[-1].set_bias(new_bias[-1])
 
-    def set_sps(self):
+    def set_sps(self) -> None:
+        """Apply symmetric plasticity schedule (SPS) weights across all hidden layers."""
         for i in range(1, self.n_dims - 1):
             self.layers[i].set_sps(self.layers[i + 1].w_up)
 
-    def set_copybackprop(self):
+    def set_copybackprop(self) -> None:
+        """Set copy-back propagation weights across all hidden layers."""
         for i in range(1, self.n_dims - 1):
             self.layers[i].copybackprob(self.layers[i + 1].w_up)
 
-    def set_record_all_spks(self, val: bool):
+    def set_record_all_spks(self, val: bool) -> None:
+        """Enable or disable full spike recording in all layers.
+
+        Args:
+            val: ``True`` to record all spikes, ``False`` to disable.
+        """
         for layer in self.layers:
             layer.record_all_spks = val
 
-    def set_symmetrization(self):
+    def set_symmetrization(self) -> None:
+        """Configure hidden layers for the symmetrization phase.
+
+        Sets ``lam_api = 1`` and zeros out interneuron weights in all hidden layers.
+        """
         for i in range(1, self.n_dims - 1):
             self.layers[i].lam_api = 1.0
             self.layers[i].set_weights(w_pi=0.0, w_ip=0.0)
 
-    def unset_symmetrization(self):
+    def unset_symmetrization(self) -> None:
+        """Restore normal hidden-layer configuration after the symmetrization phase."""
         for i in range(1, self.n_dims - 1):
             self.layers[i].lam_api = self.lam_api
         self.set_sps()
 
-    def distribute_weights(self, update_down=True):
+    def distribute_weights(self, update_down: bool = True) -> None:
+        """Initialize feedback weights; uses SPS or copy-back depending on ``update_down``.
+
+        Args:
+            update_down: If ``False``, use copy-back propagation instead of SPS.
+        """
         if not update_down:
             self.set_copybackprop()
         self.set_sps()
 
-    def init_tracker(self, rec_quants: list[list[str]], num_samples, compress_len):
+    def init_tracker(
+        self, rec_quants: list[list[str]], num_samples: int, compress_len: int
+    ) -> None:
+        """Allocate ``Tracker`` objects for the requested quantities and layers.
+
+        Args:
+            rec_quants: List of quantity name lists, one per layer (including input layer).
+            num_samples: Number of compressed samples to store per tracker.
+            compress_len: Number of time steps averaged into one stored sample.
+        """
         assert len(rec_quants) == len(
             self.dims
         ), f"rec_quants should have {self.n_dims} entries, but has {len(rec_quants)}."  # noqa
@@ -544,13 +826,18 @@ class Network:
             )
         self.records.append(rcs)
 
-    def update_spks(self):
-        # update input spikes:
+    def update_spks(self) -> None:
+        """Advance the spike state for all layers at the current time step."""
         for layer in self.layers:
             layer.update_spks(self.t)
 
-    def update_mempot(self, u_in: npt.NDArray, u_tgt: Optional[npt.NDArray]):
-        # update input_mempot:
+    def update_mempot(self, u_in: npt.NDArray, u_tgt: npt.NDArray | None) -> None:
+        """Update membrane potentials across all layers.
+
+        Args:
+            u_in: Input voltage for the input layer.
+            u_tgt: Target voltage for the output layer, or ``None`` during validation.
+        """
         self.layers[0].update_mempot(u_in)
         self.layers[1].update_mempot(
             self.t, self.layers[0].last_spks, self.layers[2].last_spks_pyr
@@ -563,7 +850,8 @@ class Network:
             )
         self.layers[-1].update_mempot(self.t, self.layers[-2].last_spks_pyr, u_tgt)
 
-    def update_plasticity_up(self):
+    def update_plasticity_up(self) -> None:
+        """Apply upward plasticity updates to all eligible layers."""
         if self.update_up:
             self.layers[1].plasticity_up(self.t, self.layers[0].last_spks)
             for i in range(2, self.n_dims):
@@ -574,7 +862,8 @@ class Network:
         if self.set_sps_on:
             self.set_sps()
 
-    def update_plasticity_down(self):
+    def update_plasticity_down(self) -> None:
+        """Apply STDP downward plasticity updates to all hidden layers."""
         if self.update_down:
             for i in range(1, self.n_dims - 1):
                 self.layers[i].plasticity_down(self.t, self.layers[i + 1].last_spks_pyr)
@@ -582,10 +871,18 @@ class Network:
     def update_step(
         self,
         u_in: npt.NDArray,
-        u_tgt: Optional[npt.NDArray],
+        u_tgt: npt.NDArray | None,
         plasticity_up_on: bool,
         plasticity_down_on: bool,
-    ):
+    ) -> None:
+        """Perform one simulation time step: spikes → potentials → plasticity.
+
+        Args:
+            u_in: Input voltage for the input layer.
+            u_tgt: Target voltage for the output layer, or ``None``.
+            plasticity_up_on: Whether to apply upward plasticity updates.
+            plasticity_down_on: Whether to apply downward plasticity updates.
+        """
         self.update_spks()
         self.update_mempot(u_in, u_tgt)
         if plasticity_up_on:
@@ -593,12 +890,18 @@ class Network:
         if plasticity_down_on:
             self.update_plasticity_down()
 
-    def record_quantities(self):
+    def record_quantities(self) -> None:
+        """Call ``record()`` on all active ``Tracker`` objects."""
         for rcs in self.records:
             for quant in rcs.values():
                 quant.record()
 
-    def finalize_tracker(self):
+    def finalize_tracker(self) -> list[dict[str, npt.NDArray]]:
+        """Flush all ``Tracker`` objects and return the recorded arrays.
+
+        Returns:
+            List of dicts (one per layer) mapping quantity names to compressed arrays.
+        """
         tracker_res = []
         for rcs in self.records:
             res = {}
@@ -608,7 +911,12 @@ class Network:
             tracker_res.append(res)
         return tracker_res
 
-    def finalize_mean_rates(self):
+    def finalize_mean_rates(self) -> list[dict[str, npt.NDArray]]:
+        """Collect per-pattern mean spike rates from all layers.
+
+        Returns:
+            List of dicts (one per layer) mapping population names to rate arrays.
+        """
         mean_spks = [{"input": np.array(self.layers[0].mean_rates_pattern)}]
         for layer in self.layers[1:-1]:
             mean_spks.append(
@@ -620,21 +928,36 @@ class Network:
         mean_spks.append({"pyr": np.array(self.layers[-1].rates_pattern_pyr)})
         return mean_spks
 
-    def finalize_all_spks(self) -> list[dict[str, list]]:
+    def finalize_all_spks(self) -> list[dict[str, list[list[float]]]]:
+        """Collect all spike trains from all layers.
+
+        Returns:
+            List of spike dicts (one per layer) as returned by each layer's ``get_all_spks()``.
+        """
         return [layer.get_all_spks() for layer in self.layers]
 
-    def calc_rates_pattern(self):
+    def calc_rates_pattern(self) -> None:
+        """Finalize per-pattern rate estimates in all layers for the current pattern."""
         for layer in self.layers:
             layer.calc_rates_pattern(self.t_pattern)
 
     def run_pattern(
         self,
         u_inp: npt.NDArray,
-        pattern_id,
-        u_tgt: Optional[npt.NDArray] = None,
+        pattern_id: int,
+        u_tgt: npt.NDArray | None = None,
         validation: bool = False,
         symmetrization: bool = False,
-    ):
+    ) -> None:
+        """Run the network for one input pattern.
+
+        Args:
+            u_inp: Input voltage vector for this pattern.
+            pattern_id: Index used to store the mean output in ``u_out_rec``.
+            u_tgt: Target voltage for nudging; ``None`` disables nudging.
+            validation: If ``True``, plasticity is suppressed regardless of ``u_tgt``.
+            symmetrization: If ``True``, run the symmetrization phase for this pattern.
+        """
         t_start = self.t
         t_stop = t_start + self.len_pattern
         # capture the mean output when the learning lag is over!
@@ -664,17 +987,37 @@ class Network:
         self,
         u_inp: npt.NDArray,
         t_pattern: int,
-        recorded_quantities: list,
+        recorded_quantities: list[list[str]],
         compress_len: int,
         len_epoch: int,
         validation_len: int,
         update_up: bool,
         update_down: bool,
-        u_tgt: Optional[npt.NDArray] = None,
+        u_tgt: npt.NDArray | None = None,
         set_sps: bool = True,
         record_all_spks: bool = True,
         len_symm: int = 0,
-    ):
+    ) -> dict[str, Any]:
+        """Run the network for the full simulation and return results.
+
+        Args:
+            u_inp: Input voltages, shape ``(n_patterns, n_in)``.
+            t_pattern: Number of refractory periods per pattern.
+            recorded_quantities: Quantity names to record, one list per layer.
+            compress_len: Time steps averaged into one recorded sample.
+            len_epoch: Number of training patterns per epoch.
+            validation_len: Number of validation patterns per epoch.
+            update_up: Whether to apply upward plasticity.
+            update_down: Whether to apply downward plasticity.
+            u_tgt: Target voltages, shape ``(n_patterns, n_out)``, or ``None``.
+            set_sps: Whether to update SPS weights after each upward update.
+            record_all_spks: Whether to record the full spike trains.
+            len_symm: Number of symmetrization patterns at the start of each epoch.
+
+        Returns:
+            Dict with keys ``"recordings"``, ``"mean_rates"``, ``"all_spks"``,
+            ``"u_out"``, ``"u_in"``, ``"u_tgt"``, and ``"validation"``.
+        """
         self.t_pattern: int = t_pattern
         self.len_pattern: int = t_pattern * self.t_ref
         assert (
@@ -696,7 +1039,6 @@ class Network:
         self.init_tracker(recorded_quantities, num_rec_samples, compress_len)
         self.set_record_all_spks(record_all_spks)
 
-        # TODO: implement validation and epochs counter
         total_epoch_len = len_epoch + validation_len
 
         self.u_out_rec = np.empty((u_inp.shape[0], self.dims[-1]))

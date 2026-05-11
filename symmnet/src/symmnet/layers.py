@@ -5,12 +5,17 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
 from torch.nn import init
 from torch.nn.modules.utils import _pair
 from torch.nn.parameter import Parameter
 
 
-def conv2d_fa_backward_hook(module, grad_input, grad_output):
+def conv2d_fa_backward_hook(
+    module: nn.Module,
+    grad_input: tuple[Tensor, ...],
+    grad_output: tuple[Tensor, ...],
+) -> tuple[Tensor, ...] | None:
     """
     Backward hook for Conv2dFA layers.
 
@@ -41,12 +46,16 @@ def conv2d_fa_backward_hook(module, grad_input, grad_output):
 
 class LinearFuncFA(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, inp, weight, bias, fb_weight):
+    def forward(
+        ctx, inp: Tensor, weight: Tensor, bias: Tensor | None, fb_weight: Tensor
+    ) -> Tensor:
         ctx.save_for_backward(inp, weight, bias, fb_weight)
         return F.linear(inp, weight, bias)
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(
+        ctx, grad_output: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor | None, None]:
         inp, weight, bias, fb_weight = ctx.saved_tensors
 
         grad_input = grad_output.mm(fb_weight)
@@ -60,12 +69,16 @@ class LinearFuncFA(torch.autograd.Function):
 
 class LinearFuncKP(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, inp, weight, bias, fb_weight):
+    def forward(
+        ctx, inp: Tensor, weight: Tensor, bias: Tensor | None, fb_weight: Tensor
+    ) -> Tensor:
         ctx.save_for_backward(inp, weight, bias, fb_weight)
         return F.linear(inp, weight, bias)
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(
+        ctx, grad_output: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor | None, Tensor]:
         inp, weight, bias, fb_weight = ctx.saved_tensors
 
         grad_input = grad_output.mm(fb_weight)
@@ -80,12 +93,16 @@ class LinearFuncKP(torch.autograd.Function):
 
 class LinearFuncSCFA(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, inp, weight, bias, fb_weight):
+    def forward(
+        ctx, inp: Tensor, weight: Tensor, bias: Tensor | None, fb_weight: Tensor
+    ) -> Tensor:
         ctx.save_for_backward(inp, weight, bias, fb_weight)
         return F.linear(inp, weight, bias)
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(
+        ctx, grad_output: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor | None, None]:
         inp, weight, bias, fb_weight = ctx.saved_tensors
 
         grad_input = grad_output.mm(fb_weight * weight.sign())
@@ -97,15 +114,21 @@ class LinearFuncSCFA(torch.autograd.Function):
         return grad_input, grad_weight, grad_bias, None
 
 
-def linear_fa(inp, weight, bias, fb_weights):
+def linear_fa(
+    inp: Tensor, weight: Tensor, bias: Tensor | None, fb_weights: Tensor
+) -> Tensor:
     return LinearFuncFA.apply(inp, weight, bias, fb_weights)
 
 
-def linear_kp(inp, weight, bias, fb_weights):
+def linear_kp(
+    inp: Tensor, weight: Tensor, bias: Tensor | None, fb_weights: Tensor
+) -> Tensor:
     return LinearFuncKP.apply(inp, weight, bias, fb_weights)
 
 
-def linear_scfa(inp, weight, bias, fb_weights):
+def linear_scfa(
+    inp: Tensor, weight: Tensor, bias: Tensor | None, fb_weights: Tensor
+) -> Tensor:
     return LinearFuncSCFA.apply(inp, weight, bias, fb_weights)
 
 
@@ -125,7 +148,7 @@ class LinearFA(nn.Module):
 
     __constants__ = ["bias", "in_features", "out_features"]
 
-    def __init__(self, in_features, out_features, bias=True):
+    def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
         """
         Initialize the LinearFA layer.
 
@@ -147,7 +170,7 @@ class LinearFA(nn.Module):
             self.register_parameter("bias", None)
         self.reset_parameters()
 
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
         """
         Initialize or reset the parameters of the layer.
         """
@@ -158,7 +181,7 @@ class LinearFA(nn.Module):
             bound = 1 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
-    def forward(self, input):
+    def forward(self, input: Tensor) -> Tensor:
         """
         Forward pass of the LinearFA layer.
 
@@ -170,7 +193,7 @@ class LinearFA(nn.Module):
         """
         return linear_fa(input, self.weight, self.bias, self.fb_weight)
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         """
         Extra representation of the module for printing.
 
@@ -183,11 +206,11 @@ class LinearFA(nn.Module):
 
 
 class LinearKP(LinearFA):
-    def __init__(self, in_features, out_features, bias=True):
+    def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
         super().__init__(in_features, out_features, bias=bias)
         self.fb_weight.requires_grad_()
 
-    def forward(self, input):
+    def forward(self, input: Tensor) -> Tensor:
         """
         Forward pass of the LinearFA layer.
 
@@ -201,11 +224,11 @@ class LinearKP(LinearFA):
 
 
 class LinearSCFA(LinearFA):
-    def __init__(self, in_features, out_features, bias=True):
+    def __init__(self, in_features: int, out_features: int, bias: bool = True) -> None:
         super().__init__(in_features, out_features, bias=bias)
         self.fb_weight.data = self.fb_weight.data.abs()
 
-    def forward(self, input):
+    def forward(self, input: Tensor) -> Tensor:
         """
         Forward pass of the LinearFA layer.
 
@@ -244,18 +267,18 @@ class _ConvNdFA(nn.Module):
 
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride,
-        padding,
-        dilation,
-        transposed,
-        output_padding,
-        groups,
-        bias,
-        padding_mode,
-    ):
+        in_channels: int,
+        out_channels: int,
+        kernel_size: tuple[int, ...],
+        stride: tuple[int, ...],
+        padding: tuple[int, ...],
+        dilation: tuple[int, ...],
+        transposed: bool,
+        output_padding: tuple[int, ...],
+        groups: int,
+        bias: bool,
+        padding_mode: str,
+    ) -> None:
         """
         Initialize the _ConvNdFA layer.
 
@@ -314,7 +337,7 @@ class _ConvNdFA(nn.Module):
             self.register_parameter("bias", None)
         self.reset_parameters()
 
-    def reset_parameters(self):
+    def reset_parameters(self) -> None:
         """
         Initialize or reset the parameters of the layer.
         """
@@ -325,7 +348,7 @@ class _ConvNdFA(nn.Module):
             bound = 1 / math.sqrt(fan_in)
             init.uniform_(self.bias, -bound, bound)
 
-    def extra_repr(self):
+    def extra_repr(self) -> str:
         """
         Initialize or reset the parameters of the layer.
         """
@@ -368,16 +391,16 @@ class Conv2dFA(_ConvNdFA):
 
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride=1,
-        padding=0,
-        dilation=1,
-        groups=1,
-        bias=True,
-        padding_mode="zeros",
-    ):
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int | tuple[int, int],
+        stride: int | tuple[int, int] = 1,
+        padding: int | tuple[int, int] = 0,
+        dilation: int | tuple[int, int] = 1,
+        groups: int = 1,
+        bias: bool = True,
+        padding_mode: str = "zeros",
+    ) -> None:
         """
         Initialize the Conv2dFA layer.
 
@@ -413,7 +436,7 @@ class Conv2dFA(_ConvNdFA):
 
         self.register_backward_hook(conv2d_fa_backward_hook)
 
-    def forward(self, input):
+    def forward(self, input: Tensor) -> Tensor:
         """
         Forward pass of the Conv2dFA layer.
 

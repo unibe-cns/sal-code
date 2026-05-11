@@ -1,7 +1,7 @@
 # Official code repository for the original spike-based alignment learning paper
 
-<!-- [![CI](https://github.com/unibe-cns/sal-code/actions/workflows/ci.yml/badge.svg)](https://github.com/unibe-cns/sal-code/actions/workflows/ci.yml) -->
-<!-- [![Lint](https://github.com/unibe-cns/sal-code/actions/workflows/lint.yml/badge.svg)](https://github.com/unibe-cns/sal-code/actions/workflows/lint.yml) -->
+[![CI](https://github.com/unibe-cns/sal-code/actions/workflows/ci.yml/badge.svg)](https://github.com/unibe-cns/sal-code/actions/workflows/ci.yml)
+[![Lint](https://github.com/unibe-cns/sal-code/actions/workflows/lint.yml/badge.svg)](https://github.com/unibe-cns/sal-code/actions/workflows/lint.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![arXiv](https://img.shields.io/badge/arXiv-2503.02642-b31b1b.svg)](https://arxiv.org/abs/2503.02642)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
@@ -9,13 +9,13 @@
 ## About this repository
 
 This repository contains the official implementation for the paper
-**"Weight transport through spike timing for robust local gradients"**
+**"Spike-based alignment learning solves the weight transport problem"**
 (Gierlich et al., 2025, [arXiv:2503.02642](https://arxiv.org/abs/2503.02642)).
 
 The paper presents a solution to the well-known **weight transport problem** -- a long-standing problem in computational neuroscience and neuromorphic computing.
 Many well-established learning algorithms from machine learning such as backpropagation require some form of weight symmetry, which effectively means that weight information has to be copied from one synapse to another -- an operation that violates locality in physical computing.
 
-In our paper, we present **spike-based alignment learning (SAL)**, a missing peace for constructing purely local online learning rules for both the brain and brain-inspired spiking hardware.
+In our paper, we present **spike-based alignment learning (SAL)**, a missing piece for constructing purely local online learning rules for both the brain and brain-inspired spiking hardware.
 
 This repository contains the python code to reproduce the experiments presented in the paper.
 We demonstrate the effectiveness of SAL in various families of models:
@@ -27,7 +27,7 @@ We demonstrate the effectiveness of SAL in various families of models:
 - **Deep convolutional networks**: A standard image classification task serves as framework to benchmark SAL against other spiking and non-spiking weight symmetrization algorithms
 
 
-## How to set-up and run the simluations
+## How to set up and run the simulations
 
 ### Requirements and dependencies
 
@@ -44,49 +44,45 @@ The software is purely written in Python (>= 3.11) and requires the packages lis
 
 Typical setup time: ca. 5 min
 
-1. Clone the repo (`git clone https://github.com/unibe-cns/sal-code.git` or `git clone git@github.com:unibe-cns/sal-code.git`) or create your own fork if you want to contribute to the project.
-2. Setup you local **python environment** using you favorite tool:
+1. Clone the repo. 
+2. Set up your local **Python environment** using your favorite tool:
   - The code is tested for python versions >= 3.11 only.
-  - Using **`venv`**: `python -m venv --system-site-packages <name_of_env>` and activate it: `source ./<name_of_env>/bin/activate`
-  - Or using **`conda`**: `conda create -n <name_of_env>` (it's recommended to add the python version: python=3.X) and activate it: `conda activate <name_of_env>`
-3. Go to the repo `cd sal-code` and **install the dependencies**: `python -m pip install -r requirements.txt`
-4. Register the ipykernel with `python -m ipykernel install --user --name sal`
-(5. Install the **git pre-commit-hooks**: `pre-commit install.` This step is recommended if you want to contribute to the project).
-6. Install the pip package for the STDD-calculator: `python -m pip install -e stdd_calculator`. This installs the package `stddc`.
-7. Install the pip package for the spiking sampling network: `python -m pip install -e spiking_sampling_network`. This installs the package `neuralsampling`.
-8. Install the pip package for the spiking microcircuits: `python -m pip install -e spiking_microcircuits`. This installs the package `microcircuits`.
-9. Install the pip package for the symmnet deeplearning experiments: `python -m pip install -e symmnet`. This installs the package `symmnet`.
+  - Using **`venv`**: `python -m venv <name_of_env>` and activate it: `source ./<name_of_env>/bin/activate`
+  - Or using **`conda`**: `conda create -n <name_of_env> --no-default-packages` (it's recommended to add the python version: python=3.X) and activate it: `conda activate <name_of_env>`
+3. **install the dependencies**: `python -m pip install -r requirements.txt`
+4. Register the ipykernel with `python -m ipykernel install --user --name <name-of-env>`
+5. Install the pip package for the STDD-calculator: `python -m pip install -e stdd_calculator`. This installs the package `stddc`.
+6. Install the pip package for the spiking sampling network: `python -m pip install -e spiking_sampling_network`. This installs the package `neuralsampling`.
+7. Install the pip package for the spiking microcircuits: `python -m pip install -e spiking_microcircuits`. This installs the package `microcircuits`.
+8. Install the pip package for the SymmNet deep-learning experiments: `python -m pip install -e symmnet`. This installs the package `symmnet`.
 
 
 ### Run the simulations for the paper:
 
-The scripts for executing the experiments are located in ´scripts´.
+The scripts for executing the experiments are located in `scripts/`.
 
 #### Figure 2
   1. The spike-timing difference distributions (fig. 2c) are generated by the jupyter notebook `scripts/sal_principle/stdd.ipynb`.
   2. The weight evolution of the two neuron system (fig. 2d) and the phase plane diagram (fig. 2e) is generated by the jupyter notebook `scripts/sal_principle/ppd.ipynb`.
   
 #### Figure 4 and 5
-A minimal working example for a simulation of a spiking sampling network is provided by `scripts/ssn/train_bm.py` and the corresponding parameter file `minimnal_example.yaml`. It can be executed by `python train_bm.py minimal_example.yaml`.
+A minimal working example for a simulation of a spiking sampling network is provided by `scripts/ssn/train_bm.py` and the corresponding parameter file `minimal_working_example.yaml`. It can be executed by `python train_bm.py minimal_working_example.yaml`; the results are stored in `results/minimal_working_example/`
 
-To reproduce the raw data for figure 4 and five, the scripts and directories in `scripts/ssn` are available. A single simulation can be executed on a single CPU core and typically takes one to two hours. For each of the four experiment types (i.e. synaptic noise and plasticity noise scenario each with and without SAL), a total of 120 independent runs are required. We therefore recommend the simulations to be run in parallel on a HPC cluster. The raw data is then saved in the folder `results`.
+To reproduce the raw data for figure 4 and 5, the scripts and directories in `scripts/ssn` are available. A single simulation can be executed on a single CPU core and typically takes 30 minutes. For each of the six experiment types (i.e. synaptic noise and plasticity noise scenario each with and without SAL and Kolen-Pollack), a total of 120 independent runs are required. We therefore recommend the simulations to be run in parallel on a HPC cluster. The raw data is then saved in the folder `results`.
 
 Each subdirectory of `scripts/ssn/` contains a `exp.yaml` parameter file and a `change_params.py` python script. 
-1. Execute `python change_params.py` to produce the parameter files for the parameter sweep acros different seeds and noise strengths.
-2. Then run `bash launcher.sh` to start the simulations. It is recommended to start this through slurm with 120 parallel tasks.
-3. The raw data can be plotted with `scripts/ssn/plot_fig.ipynb`.
+1. Run `bash run.sh` to start the simulations. It will first call `change_parameters.py` and then spawn the simulations.
+2. The raw data can be plotted with `scripts/ssn/plot_fig.ipynb`.
 
 #### Figure 6
 
-A minimal working example for a simulation of a spiking microcircuits student teacher network is provided by `scripts/microcircuits/run.py` and the corresponding parameter file `example.yaml`. It can be executed by `python run.py example.yaml 0`.
+A minimal working example for a simulation of a spiking microcircuits student teacher network is provided by `scripts/microcircuits/train_mc.py` and the corresponding parameter file `example.yaml`. It can be executed by `python train_mc.py example.yaml`.
 
-To repoduce the raw data for figure 6, follow the same steps as for the sampling networks. 
+To reproduce the raw data for figure 6, follow the same steps as for the sampling networks. 
 
-In each subdirectory of `scripts/microcircuits`, do
-1. `python change_params.py` to produce the parameter files for the 20 runs with different seeds.
-2. Launch the runs with `bash launcher.sh`. The raw data is stored in `results/microcircuits`
-
-The raw data can be plotted with `scripts/microcircuits/plot_fig.ipynb`.
+1. In each subdirectory of `scripts/microcircuits` (i.e. `bp` for backpropagation, `fa` for feedback alignment, `sal` for SAL), execute `run.sh`. This creates the parameter YAML files for 20 runs with individual seeds and spawns 20 parallel processes. A single simulation takes ca. 4 hours to finish.
+The raw simulation results are stored in `results/microcircuits`.
+2. The raw data can be plotted with `scripts/microcircuits/plot_fig.ipynb`.
 
 #### Figure 7
 
@@ -94,17 +90,33 @@ To reproduce the data and plots for figure 7 (i.e., the weight scatter plots com
 
 #### Figure 8
 
-A minimal working example for the deep learning experiment is provided by `scripts/symm_net/main_salnet.py` and the corresponding parameter file `exp_setting.yaml`.
+A minimal working example for the deep learning experiment is provided by `scripts/symm_net/main_salnet.py` and the corresponding parameter file `exp_settings.yaml`.
+As forward training of the convolutional neural networks is implemented in pytorch, we highly recommend to use a GPU.
 
-Usage: `python main_salnet.py -f exp_setting.yaml -s <type_of_experiment> --dataset <dataset> --tags <tag1,tag2>`
+Usage: `python main_salnet.py -f exp_settings.yaml -s <type_of_experiment> --dataset <dataset> --tags <tag1,tag2>`
 
-- `type_of_experiment`: choose the learning algorithm (equivalent to the section names in `exp_setting.yaml`)
+- `type_of_experiment`: choose the learning algorithm (equivalent to the section names in `exp_settings.yaml`)
 - `dataset`: choose one the following datasets: `cifar10`, `svhn`, `mnist`, `fmnist`
-- optionally, you can pass a list of descriptive tags to keep tack of your runs.
+- optionally, you can pass a list of descriptive tags to keep track of your runs.
 
+Typical execution time per run: ~15 min (BP/FA/KP), ~30–45 min (SAL), ~2 h (RDD).
+
+For conveniently reproducing any of the data shown in figure 8, we provide two workflows:
+- `sweep.py`: suitable for small-scale parameter sweeps. It directly launches the required sub-processes. Example usage: `python sweep.py --datasets cifar10 --algos bp fa sal`.
+See `python sweep.py --help` for all available settings.
+- For large scale parameter sweeps (for instance to reproduce the 105 runs for all datasets, algorithms and seeds) on an HPC cluster (with SLURM), we provided the following workflow that needs only minimal adaptation to the available system. 
+  1. Run `sweep_creator.py`: It creates `jobs.sh` which contains all `main_salnet.py`-calls with the relevant settings. 
+See `python sweep_creator.py --help` for all available settings (the default settings will rerun the original simulations).
+  2. Modify `slurm.sh` to specify the relevant settings for your HPC cluster.
+  3. Run `bash slurm_submit.sh`. It will call `slurm.sh` internally and start a SLURM array job.
+  4. The data can be plotted with `scripts/symm_net/plots.ipynb`
 #### Figure 9
 
-A minimal working example for the Time evolution of SAL in the SALNet is provided by `scripts/symm_net/salnet_symm.py`.
+A minimal working example for the time evolution of SAL in the SALNet is provided by `scripts/symm_net/salnet_symm.py`.
+
+Example usage: `python salnet_symm.py --lr 0.01 --n_epochs 200 --len_epoch 500`.
+
+For conveniently reproducing the data shown in figure 9, we provide the same workflows as explained above with the files `sweep_symm.py` for quick small-scale scans and `sweep_creator_symm.py` to launch all 20 runs as a SLURM array job.
 
 #### Figure 10
 
@@ -112,11 +124,33 @@ The "Dale's law" experiment can be reproduced by `scripts/dales_law/EI-system.ip
 
 #### Figure 11
 
-The data for figure 7 can be reproached by `scripts/psp_shapes.ipynb`. Note that this notebook typically requires a lot of memory.
+The data for figure 11 can be reproduced by `scripts/psp_shapes.ipynb`. Note that this notebook typically requires a lot of memory (> 8GB).
 
 #### Figure 12
 
-Figure 8 can be reproduced by `scripts/plots_for_proof.ipynb`.
+Figure 12 can be reproduced by `scripts/plots_for_proof.ipynb`.
+
+
+## Tests
+
+The test suite lives in `tests/` and is run with [pytest](https://pytest.org).
+It contains two layers of tests:
+
+**Fast smoke tests** (run automatically in CI, no GPU required):
+```bash
+pytest tests/
+```
+These verify that all four packages import correctly and that `main_salnet.py`, `traim_mc.py` and `train_bm.py` complete a minimal
+run without errors.
+
+**PyTorch training tests** (opt-in, GPU recommended):
+```bash
+pytest tests/ --pytorch                       # bp section only (default)
+pytest tests/ --pytorch --sections bp,fa,sal  # specific subset
+pytest tests/ --pytorch --sections all        # test all seven algorithms 
+```
+These run `main_salnet.py` end-to-end for one epoch per selected algorithm
+section. They are skipped by default because they require PyTorch CNN training.
 
 
 ## Version history

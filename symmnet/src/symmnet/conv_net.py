@@ -1,21 +1,24 @@
 """Define the ConvNet architecture (standard pytorch ANN)."""
 
 import math
+from typing import Generator
 
 import torch.nn as nn
+from torch import Tensor
+from torch.nn import Parameter
 
 from .layers import Conv2dFA, LinearFA, LinearKP, LinearSCFA
 
 
-def conv2d_outsize(insize, kernel_size):
+def conv2d_outsize(insize: int, kernel_size: int) -> int:
     return insize - kernel_size + 1
 
 
-def maxpool2d_outsize(insize, kernel_size, stride):
+def maxpool2d_outsize(insize: int, kernel_size: int, stride: int) -> int:
     return math.floor((insize - kernel_size) / 2 + 1)
 
 
-def feature_layer_outsize(insize):
+def feature_layer_outsize(insize: int) -> int:
     return maxpool2d_outsize(
         conv2d_outsize(maxpool2d_outsize(conv2d_outsize(insize, 5), 2, 2), 5), 2, 2
     )
@@ -38,13 +41,13 @@ class ConvNet(nn.Module):
 
     def __init__(
         self,
-        input_channels,
-        input_shape,
-        use_backprop=False,
-        use_kp=False,
-        use_scfa=False,
-        use_fa_conv_layers=False,
-    ):
+        input_channels: int,
+        input_shape: tuple[int, int],
+        use_backprop: bool = False,
+        use_kp: bool = False,
+        use_scfa: bool = False,
+        use_fa_conv_layers: bool = False,
+    ) -> None:
         """
         Initialize the ConvNet model.
 
@@ -90,7 +93,6 @@ class ConvNet(nn.Module):
         self.feature_layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
 
         # Flatten features for fully connected layers
-        # TODO: I changed this here! Does it still work??
         self.feature_layers.append(nn.Flatten(start_dim=1))
 
         self.classification_layers = []
@@ -115,7 +117,7 @@ class ConvNet(nn.Module):
         # Combine all layers into a single sequential module for the forward pass
         self.out = nn.Sequential(*(self.feature_layers + self.classification_layers))
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         """
         Forward pass of the ConvNet.
 
@@ -127,19 +129,21 @@ class ConvNet(nn.Module):
         """
         return self.out(x)
 
-    def parameters_weight(self):
+    def parameters_weight(self) -> Generator[Parameter, None, None]:
         for name, param in self.named_parameters():
             if name in ConvNet.FC_WEIGHT:
                 yield param
 
-    def parameters_fb_weight(self, ignore_require_grad=False):
+    def parameters_fb_weight(
+        self, ignore_require_grad: bool = False
+    ) -> Generator[Parameter, None, None]:
         for name, param in self.named_parameters():
             if name in ConvNet.FC_FB_WEIGHT and (
                 param.requires_grad or ignore_require_grad
             ):
                 yield param
 
-    def parameters_other(self):
+    def parameters_other(self) -> Generator[Parameter, None, None]:
         for name, param in self.named_parameters():
             if name not in ConvNet.FC_WEIGHT + ConvNet.FC_FB_WEIGHT:
                 yield param

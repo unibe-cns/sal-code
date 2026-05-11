@@ -5,13 +5,9 @@ from abc import ABC, abstractmethod
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 
 from .utils import batched_outer
-
-# TODO: add a non-rolling buffer and an all-at-once stdp rule
-# TODO: maybe register all relevant model params (time constants etc.) as
-# buffers with self.register_buffer?? --> makes it easier to log an entire model
-# for reporducibility
 
 
 class BaseSpikeBuffer(ABC, nn.Module):
@@ -24,7 +20,7 @@ class BaseSpikeBuffer(ABC, nn.Module):
         num_neurons: int,
         buffer_length: int,
         batch_size: int = 1,
-    ):
+    ) -> None:
         super().__init__()
         self.buffer_length = buffer_length
         self.register_buffer(
@@ -32,29 +28,29 @@ class BaseSpikeBuffer(ABC, nn.Module):
         )
 
     @abstractmethod
-    def append(self, spikes):
+    def append(self, spikes: Tensor) -> None:
         pass
 
     @abstractmethod
-    def get(self):
+    def get(self) -> Tensor:
         pass
 
 
 class SimpleSpikeBuffer(BaseSpikeBuffer):
     """The simplest buffer one could think of."""
 
-    def append(self, spikes):
+    def append(self, spikes: Tensor) -> None:
         self.buffer = torch.roll(self.buffer, shifts=1, dims=2)
         self.buffer[:, :, 0] = spikes
 
-    def get(self):
+    def get(self) -> Tensor:
         return self.buffer
 
 
 class BaseKernel(nn.Module):
     """Base kernel, both for PSP and STDP."""
 
-    def __init__(self, kernel):
+    def __init__(self, kernel: Tensor) -> None:
         super().__init__()
         assert kernel.shape[0] == 1, "Dimension 0 of the Kernel has to be 1!"
         assert kernel.shape[1] == 1, "Dimension 1 of the Kernel has to be 1!"
@@ -62,7 +58,7 @@ class BaseKernel(nn.Module):
         self.register_buffer("kernel", kernel)
         self.len_kernel = self.kernel.shape[2]
 
-    def forward(self, spikes):
+    def forward(self, spikes: Tensor) -> Tensor:
         # spikes: [batch_size, num_neurons, time_steps]
         # Use 1D convolution to apply the box filter along the time axis
         # Reshape for conv1d: [batch_size * num_neurons, 1, time_steps]
@@ -78,7 +74,7 @@ class BaseKernel(nn.Module):
 class RectangularPSP(BaseKernel):
     """Rectangular PSPs."""
 
-    def __init__(self, t_syn):
+    def __init__(self, t_syn: int) -> None:
         kernel = torch.ones(1, 1, t_syn)
         super().__init__(kernel)
 
@@ -86,7 +82,7 @@ class RectangularPSP(BaseKernel):
 class AlphaPSP(BaseKernel):
     """Alpha-shaped PSP kernel, normalized to t_ref."""
 
-    def __init__(self, t_syn, t_ref):
+    def __init__(self, t_syn: float, t_ref: float) -> None:
         ts = torch.arange(int(t_syn * 10)).reshape(1, 1, -1)
         kernel = t_ref / t_syn**2 * ts * torch.exp(-ts / t_syn)
         super().__init__(kernel)
@@ -95,33 +91,33 @@ class AlphaPSP(BaseKernel):
 class ExpSTDP(BaseKernel):
     """Exponential STDP window."""
 
-    def __init__(self, tau, a, len_kernel):
+    def __init__(self, tau: float, a: float, len_kernel: int) -> None:
         ts = torch.arange(len_kernel).reshape(1, 1, -1)
         kernel = a * torch.exp(-ts / tau)
         super().__init__(kernel)
 
 
 class ActivationFunction(nn.Module):
-    def __init__(self, t_ref):
+    def __init__(self, t_ref: float) -> None:
         super().__init__()
         self.log_t_ref = math.log(t_ref)
 
-    def forward(self, mem_pot):
+    def forward(self, mem_pot: Tensor) -> Tensor:
         return torch.sigmoid(mem_pot - self.log_t_ref)
 
 
 class GLMHiddenLayer(nn.Module):
     def __init__(
         self,
-        n_in,
-        n_out,
-        n_next,
-        t_ref,
-        stdp_lr,
-        batch_size=1,
-        buffer_length=2,
-        psp=None,
-    ):
+        n_in: int,
+        n_out: int,
+        n_next: int,
+        t_ref: int,
+        stdp_lr: float,
+        batch_size: int = 1,
+        buffer_length: int = 2,
+        psp: BaseKernel | None = None,
+    ) -> None:
         super().__init__()
 
         # model settings:
@@ -147,7 +143,7 @@ class GLMHiddenLayer(nn.Module):
         self.register_buffer("mem_pot", torch.zeros(batch_size, n_out))
         self.spikes = SimpleSpikeBuffer(
             n_out, buffer_length * t_ref, batch_size=batch_size
-        )  # TODO: change buffer length!
+        )
         self.register_buffer(
             "last_spike_counter", torch.full_like(self.mem_pot, torch.inf)
         )
@@ -157,17 +153,17 @@ class GLMHiddenLayer(nn.Module):
         self.batch_size = batch_size
 
     @property
-    def device(self):
+    def device(self) -> torch.device:
         return next(self.parameters()).device
 
-    def init_params(self):
+    def init_params(self) -> None:
         # initialize params (although they're actually copied from the corresponding ANN)
         nn.init.kaiming_uniform_(self.weight, a=5**0.5)
         nn.init.kaiming_uniform_(self.fb_weight, a=5**0.5)
-        bound = self.n_out**-0.5  # TODO check if this is useful
+        bound = self.n_out**-0.5
         nn.init.uniform_(self.bias, -bound, bound)
 
-    def update_mempot(self, bottom_up_spikes, top_down_spikes):
+    def update_mempot(self, bottom_up_spikes: Tensor, top_down_spikes: Tensor) -> None:
         bottom_up_psps = self.psp(bottom_up_spikes)
         top_down_psps = self.psp(top_down_spikes)
         self.mem_pot = (
@@ -176,7 +172,7 @@ class GLMHiddenLayer(nn.Module):
             + self.bias
         )
 
-    def update_spikes(self, t=0.0, start_id=1):
+    def update_spikes(self, t: float = 0.0, start_id: int = 1) -> None:
         inst_rate = self.phi(self.mem_pot)
         random_vals = torch.rand(self.batch_size, self.n_out, device=self.device)
         new_spikes = torch.logical_and(
@@ -186,11 +182,11 @@ class GLMHiddenLayer(nn.Module):
         self.last_spike_counter[new_spikes] = 1.0
         self.spikes.append(new_spikes.float())
 
-    def forward(self):
+    def forward(self) -> None:
         # not sure, what's the best implementation here...
         pass
 
-    def fb_stdp_online(self, top_down_spikes):
+    def fb_stdp_online(self, top_down_spikes: Tensor) -> None:
         # here: top_down_spikes = pre, own spikes = post
         trace_pre = self.causal_stdp(top_down_spikes)
         trace_post = self.anticausal_stdp(self.spikes.get())
@@ -202,7 +198,7 @@ class GLMHiddenLayer(nn.Module):
             trace_post[:, :, 0], top_down_spikes[:, :, 0]
         )
 
-    def apply_fb_weight_update(self, zero_dw=True):
+    def apply_fb_weight_update(self, zero_dw: bool = True) -> Tensor:
         dw = self.delta_fb_weight.mean(dim=0)
         dw /= float(self.causal_stdp.len_kernel)
         with torch.no_grad():
@@ -215,14 +211,14 @@ class GLMHiddenLayer(nn.Module):
 class GLMInputLayer(GLMHiddenLayer):
     def __init__(
         self,
-        n_out,
-        n_next,
-        t_ref,
-        stdp_lr,
-        batch_size=1,
-        buffer_length=2,
-        psp=None,
-    ):
+        n_out: int,
+        n_next: int,
+        t_ref: int,
+        stdp_lr: float,
+        batch_size: int = 1,
+        buffer_length: int = 2,
+        psp: BaseKernel | None = None,
+    ) -> None:
         super().__init__(
             0,
             n_out,
@@ -235,13 +231,13 @@ class GLMInputLayer(GLMHiddenLayer):
         )
         self.weight = None
 
-    def init_params(self):
+    def init_params(self) -> None:
         # initialize params (although they're actually copied from the corresponding ANN)
         nn.init.kaiming_uniform_(self.fb_weight, a=5**0.5)
-        bound = self.n_out**-0.5  # TODO check if this is useful
+        bound = self.n_out**-0.5
         nn.init.uniform_(self.bias, -bound, bound)
 
-    def update_mempot(self, top_down_spikes):
+    def update_mempot(self, top_down_spikes: Tensor) -> None:
         top_down_psps = self.psp(top_down_spikes)
         self.mem_pot = (
             torch.matmul(top_down_psps[:, :, 0], self.fb_weight.t()) + self.bias
@@ -251,13 +247,13 @@ class GLMInputLayer(GLMHiddenLayer):
 class GLMOutputLayer(GLMHiddenLayer):
     def __init__(
         self,
-        n_in,
-        n_out,
-        t_ref,
-        batch_size=1,
-        buffer_length=2,
-        psp=None,
-    ):
+        n_in: int,
+        n_out: int,
+        t_ref: int,
+        batch_size: int = 1,
+        buffer_length: int = 2,
+        psp: BaseKernel | None = None,
+    ) -> None:
         super().__init__(
             n_in,
             n_out,
@@ -272,24 +268,24 @@ class GLMOutputLayer(GLMHiddenLayer):
         self.delta_fb_weight = None
         self.stdp_lr = None
 
-    def init_params(self):
+    def init_params(self) -> None:
         # initialize params (although they're actually copied from the corresponding ANN)
         nn.init.kaiming_uniform_(self.weight, a=5**0.5)
-        bound = self.n_out**-0.5  # TODO check if this is useful
+        bound = self.n_out**-0.5
         nn.init.uniform_(self.bias, -bound, bound)
 
-    def update_mempot(self, bottom_up_spikes):
+    def update_mempot(self, bottom_up_spikes: Tensor) -> None:
         bottom_up_psps = self.psp(bottom_up_spikes)
         self.mem_pot = (
             torch.matmul(bottom_up_psps[:, :, 0], self.weight.t()) + self.bias
         )
 
-    def fb_stdp_online(self, bottom_up_spikes):
+    def fb_stdp_online(self, bottom_up_spikes: Tensor) -> None:
         raise NotImplementedError(
             "GLMOutputLayer doesn't have feedback weights and hence no stdp rule for it."
         )
 
-    def apply_fb_weight_update(self):
+    def apply_fb_weight_update(self) -> Tensor:
         raise NotImplementedError(
             "GLMOutputLayer doesn't have feedback weights and hence no stdp rule for it."
         )
@@ -298,13 +294,13 @@ class GLMOutputLayer(GLMHiddenLayer):
 class SALNetBase(nn.Module):
     def __init__(
         self,
-        layer_dims,
-        t_ref,
-        stdp_lr,
-        batch_size=1,
-        buffer_length=2,
-        psp=None,
-    ):
+        layer_dims: list[int],
+        t_ref: int,
+        stdp_lr: float | list[float],
+        batch_size: int = 1,
+        buffer_length: int = 2,
+        psp: BaseKernel | None = None,
+    ) -> None:
         super().__init__()
         self.n_layers = len(layer_dims)
         assert self.n_layers >= 2, "The network needs at least two layers!"
@@ -353,7 +349,7 @@ class SALNetBase(nn.Module):
         )
         self.layers = nn.ModuleList(layers)
 
-    def update_mempot(self):
+    def update_mempot(self) -> None:
         # get spikes
         spikes = [layer.spikes.get() for layer in self.layers]
         # update layers
@@ -362,22 +358,22 @@ class SALNetBase(nn.Module):
             self.layers[i].update_mempot(spikes[i - 1], spikes[i + 1])
         self.layers[-1].update_mempot(spikes[-2])
 
-    def update_spikes(self, t=0.0):
+    def update_spikes(self, t: float = 0.0) -> None:
         for layer in self.layers:
             layer.update_spikes()
 
-    def fb_stdp_online(self):
+    def fb_stdp_online(self) -> None:
         for i in range(self.n_layers - 1):
             self.layers[i].fb_stdp_online(self.layers[i + 1].spikes.get())
 
-    def apply_fb_weight_update(self):
-        dws = []  # TODO: for debugging
+    def apply_fb_weight_update(self) -> list[Tensor]:
+        dws: list[Tensor] = []
         for layer in self.layers[:-1]:
             dw = layer.apply_fb_weight_update()
             dws.append(dw)
         return dws
 
-    def set_stdp_lr(self, stdp_lr):
+    def set_stdp_lr(self, stdp_lr: float | list[float]) -> None:
         if isinstance(stdp_lr, float):
             self.stdp_lr = [stdp_lr] * 3
         for layer, lr in zip(self.layers[:-1], self.stdp_lr):
@@ -385,7 +381,7 @@ class SALNetBase(nn.Module):
 
 
 class SALNet(SALNetBase):
-    _COMMON_LAYERS = [
+    _COMMON_LAYERS: list[tuple[str, str]] = [
         ("fc1.weight", "layers.1.weight"),
         ("fc1.fb_weight", "layers.0.fb_weight"),
         ("fc1.bias", "layers.1.bias"),
@@ -399,13 +395,13 @@ class SALNet(SALNetBase):
 
     def __init__(
         self,
-        layer_dims,
-        t_ref,
-        stdp_lr,
-        batch_size=1,
-        buffer_length=2,
-        psp=None,
-    ):
+        layer_dims: list[int],
+        t_ref: int,
+        stdp_lr: float | list[float],
+        batch_size: int = 1,
+        buffer_length: int = 2,
+        psp: BaseKernel | None = None,
+    ) -> None:
         assert (
             len(layer_dims) == 4
         ), "SALNT needs 4 layers to be compatible with the corresponding ConvNet."
@@ -418,7 +414,7 @@ class SALNet(SALNetBase):
             psp=psp,
         )
 
-    def load_common_state_dict(self, conv_net_state_dict):
+    def load_common_state_dict(self, conv_net_state_dict: dict[str, Tensor]) -> None:
         own_state_dict = self.state_dict()
         for other, own in SALNet._COMMON_LAYERS:
             # transpose the feedback weights, because I erroneously definedy the
@@ -429,8 +425,8 @@ class SALNet(SALNetBase):
                 own_state_dict[own] = conv_net_state_dict[other]
         self.load_state_dict(own_state_dict, strict=False)
 
-    def get_common_state_dict(self):
-        other_state_dict = {}
+    def get_common_state_dict(self) -> dict[str, Tensor]:
+        other_state_dict: dict[str, Tensor] = {}
         own_state_dict = self.state_dict()
         for other, own in SALNet._COMMON_LAYERS:
             if "fb_weight" in other:

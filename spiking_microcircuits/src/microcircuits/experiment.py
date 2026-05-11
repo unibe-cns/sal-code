@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from typing import Optional, Union
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,13 +12,21 @@ from microcircuits.model import WeightsList
 
 
 class Descriptor(dict):
-    """Holds parameters. Items behave also like normal class attributes
+    """Parameter container supporting both dict and attribute access.
 
-    Basically a subclass of a dictionary...
+    Basically a subclass of a dictionary.
     (inspired by https://github.com/scipy/scipy/blob/v1.8.1/scipy/optimize/_optimize.py#L84-L140)  # noqa
     """
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
+        """Return item ``name`` as an attribute.
+
+        Args:
+            name: Key to look up.
+
+        Raises:
+            AttributeError: If ``name`` is not in the dict.
+        """
         try:
             return self[name]
         except KeyError as e:
@@ -27,7 +35,8 @@ class Descriptor(dict):
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """Return a right-justified key-value listing."""
         if self.keys():
             m = max(map(len, list(self.keys()))) + 1
             return "\n".join(
@@ -36,56 +45,52 @@ class Descriptor(dict):
         else:
             return self.__class__.__name__ + "()"
 
-    def __dir__(self):
+    def __dir__(self) -> list[str]:
+        """Return the list of available keys."""
         return list(self.keys())
 
 
 class PropertiesDescriptor(Descriptor):
-    """Holds all properties of some kind
+    """Parameter dict with automatic sanity checks on required attributes."""
 
-    inherits from a dict. Includes automatic sanitychecks!
-    """
-
-    # TODO fill all attributes!
     _REQUIRED_ATTR = {}
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
+        """Args:
+        **kwargs: Key-value pairs passed directly to the underlying dict.
+        """
         super().__init__(**kwargs)
         self._sanity_check()
 
-    def _sanity_check(self):
+    def _sanity_check(self) -> None:
+        """Assert all required attributes are present and have the correct type."""
         for item in self._REQUIRED_ATTR.items():
             assert item[0] in self.keys(), f"Keywork {item[0]} is missing!"
             assert isinstance(
                 self[item[0]], item[1]
             ), f"Item {item[0]} has type {type(item[0])} but should be {item[1]}!"
 
-    def _required_attr(self):
+    def _required_attr(self) -> dict[str, type]:
+        """Return the required-attribute specification dict."""
         return self._REQUIRED_ATTR
 
 
 class NetworkProperties(PropertiesDescriptor):
-    """Holds all network properties (= network internal parameters)
-
-    inherits from a dict. Includes automatic sanitychecks!
-    """
+    """Network internal parameters (requires ``t_ref`` and ``n_last_spks``)."""
 
     # TODO fill all attributes!
     _REQUIRED_ATTR = {"t_ref": int, "n_last_spks": int}
 
 
 class SimulationProperties(PropertiesDescriptor):
-    """Holds all network properties (= network internal parameters)
-
-    inherits from a dict. Includes automatic sanitychecks!
-    """
+    """Simulation settings (requires ``t_pattern`` and ``len_epoch``)."""
 
     # TODO fill all attributes!
     _REQUIRED_ATTR = {"t_pattern": int, "len_epoch": int}
 
 
 class InitialParameterDescriptor(PropertiesDescriptor):
-    """Holds the initial parameters (weights and biases)"""
+    """Initial weight and bias parameters (requires ``bias``)."""
 
     # _REQUIRED_ATTR = {"weights": list, "bias": list}
     # TODO introduce something like optional attributes
@@ -93,13 +98,18 @@ class InitialParameterDescriptor(PropertiesDescriptor):
 
 
 class InputDescriptor(PropertiesDescriptor):
-    """Holds the input values for the network"""
+    """Input data descriptor (requires ``training`` and ``validation`` lists)."""
 
     _REQUIRED_ATTR = {"training": list, "validation": list}
 
 
 class ExperimentDescriptor(Descriptor):
-    def __init__(self, description_file: str):
+    """Loads and validates all experiment settings from a YAML description file."""
+
+    def __init__(self, description_file: str) -> None:
+        """Args:
+        description_file: Path to the YAML file describing the experiment.
+        """
         with open(description_file, "r") as f:
             data = yaml.safe_load(f)
 
@@ -135,17 +145,26 @@ class ExperimentDescriptor(Descriptor):
 
         self.u_input = InputDescriptor(**data["u_input"])
 
-    def todict(self):
+    def todict(self) -> dict[str, dict[str, Any]]:
+        """Return a plain nested dict representation of all settings.
+
+        Returns:
+            Dict mapping each descriptor attribute name to its contents as a dict.
+        """
         res = {}
         for attr, vals in self.items():
             res[attr] = dict(vals)
         return res
 
 
-def check_network_properties(network_properties: dict):
-    """DOCSTRING
+def check_network_properties(network_properties: dict[str, Any]) -> None:
+    """Validate that all required network parameter keys are present and correctly typed.
 
-    should check that all required params are present and have the correct type!
+    Args:
+        network_properties: Dict of network parameters to validate.
+
+    Raises:
+        AssertionError: If a required key is missing or has the wrong type.
     """
     assert "t_ref" in network_properties
     assert isinstance(network_properties["t_ref"], int)
@@ -175,10 +194,14 @@ def check_network_properties(network_properties: dict):
     assert isinstance(network_properties["lr"], list)
 
 
-def check_simulation_settings(simulation_settings: dict):
-    """DOCSTRING
+def check_simulation_settings(simulation_settings: dict[str, Any]) -> None:
+    """Validate that all required simulation setting keys are present and correctly typed.
 
-    should check that all required params are present and have the correct type!
+    Args:
+        simulation_settings: Dict of simulation settings to validate.
+
+    Raises:
+        AssertionError: If a required key is missing or has the wrong type.
     """
     assert "poisson_seed" in simulation_settings
     assert isinstance(simulation_settings["poisson_seed"], int)
@@ -200,19 +223,26 @@ def check_simulation_settings(simulation_settings: dict):
     assert isinstance(simulation_settings["shuffle_validation"], int)
 
 
-# TODO: validation and so on!
-
-
 def run_teacher(
-    network_properties: dict,
-    teacher_parameters: dict,
-    simulation_settings: dict,
-    u_inp: dict,
-    plotname: Optional[str] = None,
-) -> dict:
-    """DOCSTING
+    network_properties: dict[str, Any],
+    teacher_parameters: dict[str, Any],
+    simulation_settings: dict[str, Any],
+    u_inp: dict[str, Any],
+    plotname: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Run the teacher network and return input-target pairs and raw simulation results.
 
-    TODO
+    Args:
+        network_properties: Validated network parameter dict.
+        teacher_parameters: Dict with ``"weights"`` (or ``"random_weights_init_limits"``)
+            and ``"bias"`` keys.
+        simulation_settings: Validated simulation settings dict.
+        u_inp: Dict with ``"training"`` and ``"validation"`` input voltage lists.
+        plotname: If provided, save an input-vs-target scatter plot to this path.
+
+    Returns:
+        Tuple of ``(teacher_data, raw_results)`` where ``teacher_data`` contains
+        ``"u_inp"`` and ``"u_target"`` dicts for training and validation sets.
     """
 
     print("~~~~~~~~~~~~~~~~~~~~~~~ TEACHER ~~~~~~~~~~~~~~~~~~~~~~~~~")
@@ -277,9 +307,14 @@ def run_teacher(
 
 
 def prepare_ordered_epoch(epoch_ids: np.ndarray, len_epoch: int) -> npt.NDArray:
-    """Append the indexes of the pattern in an odrdered manner in an epoch
+    """Repeat and trim pattern indices to exactly ``len_epoch`` entries.
 
-    TODO
+    Args:
+        epoch_ids: Array of pattern indices to repeat.
+        len_epoch: Target length of the returned index array.
+
+    Returns:
+        Index array of length ``len_epoch`` with ``epoch_ids`` tiled and trimmed.
     """
     num_full_repeats = int(np.ceil(len_epoch / len(epoch_ids)))
     if num_full_repeats > 0:
@@ -300,9 +335,27 @@ def shuffle_training_data(
     shuffle_val: bool = True,
     shuffle_training: bool = True,
 ) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-    """DOCSTRING
+    """Build the full training sequence by interleaving shuffled training and validation data.
 
-    TODO
+    For each epoch, ``len_epoch`` training samples and ``len_validation`` validation
+    samples are drawn (with replacement) and concatenated. A ``val_mask`` indicates
+    which patterns belong to training (1) and which to validation (0).
+
+    Args:
+        x_train: Training inputs.
+        x_val: Validation inputs.
+        y_train: Training targets.
+        y_val: Validation targets.
+        seed: Seed for the random number generator.
+        len_epoch: Number of training samples per epoch.
+        len_validation: Number of validation samples per epoch.
+        num_epochs: Number of training epochs.
+        shuffle_val: Whether to draw validation samples randomly (else ordered).
+        shuffle_training: Whether to draw training samples randomly (else ordered).
+
+    Returns:
+        Tuple ``(all_x, all_y, val_mask)`` where ``val_mask`` is 1 for training
+        patterns and 0 for validation patterns.
     """
     rng = np.random.default_rng(seed)
 
@@ -350,11 +403,23 @@ def shuffle_training_data(
 
 
 def draw_random_weights(
-    limits: Union[list, tuple],
+    limits: tuple[float, float] | list[float],
     seed: int,
-    dims: list[int, int, int],
-    down_limits: Optional[Union[list, tuple]] = None,
+    dims: list[int],
+    down_limits: tuple[float, float] | list[float] | None = None,
 ) -> WeightsList:
+    """Draw uniform random weights for a 3-layer network.
+
+    Args:
+        limits: ``(low, high)`` range for upward weights.
+        seed: Seed for the random number generator.
+        dims: Layer dimensions ``[n_in, n_hidden, n_out]``.
+        down_limits: ``(low, high)`` range for downward weights; defaults to ``limits``.
+
+    Returns:
+        ``WeightsList`` with one dict per non-input layer containing ``"w_up"``
+        and (for hidden layers) ``"w_down"`` arrays.
+    """
     down_limits = limits if down_limits is None else down_limits
     rng = np.random.default_rng(seed)
     weights = [
@@ -371,11 +436,25 @@ def draw_random_weights(
 
 
 def run_student(
-    network_properties: dict,
-    student_parameters: dict,
-    simulation_settings: dict,
-    teacher_data: dict,
-) -> dict:
+    network_properties: dict[str, Any],
+    student_parameters: dict[str, Any],
+    simulation_settings: dict[str, Any],
+    teacher_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Train the student network and return simulation results.
+
+    Args:
+        network_properties: Validated network parameter dict.
+        student_parameters: Dict with ``"weights"`` (or ``"random_weights_init_limits"``)
+            and ``"bias"`` keys.
+        simulation_settings: Validated simulation settings dict.
+        teacher_data: Dict with ``"u_inp"`` and ``"u_target"`` as produced by
+            :func:`run_teacher`.
+
+    Returns:
+        Raw simulation result dict from :meth:`~microcircuits.model.Network.run`,
+        with an additional ``"random_weights_init"`` entry.
+    """
     print("~~~~~~~~~~~~~~~~~~~~~~~ STUDENT ~~~~~~~~~~~~~~~~~~~~~~~~~")
 
     check_network_properties(network_properties)
@@ -405,8 +484,6 @@ def run_student(
 
     if simulation_settings["set_sps"]:
         net.distribute_weights(update_down=simulation_settings["update_down"])
-
-    # TODO: best way to set the weights???
 
     net.set_bias(student_parameters["bias"])
 
@@ -442,228 +519,3 @@ def run_student(
 
     res["random_weights_init"] = random_weights
     return res
-
-
-def test_all():
-    exp = ExperimentDescriptor("example_experiment.yaml")
-
-    teacher_res, t_res = run_teacher(
-        exp.network_properties,
-        exp.teacher_initial_parameters,
-        exp.teacher_simulation_settings,
-        exp.u_input,
-        "teacher.png",
-    )
-
-    print("~~~~~~~~~~~~~~~~~~~~~~~ STUDENT ~~~~~~~~~~~~~~~~~~~~~~~~~")
-    res = run_student(
-        exp.network_properties,
-        exp.student_initial_parameters,
-        exp.student_simulation_settings,
-        teacher_res,
-    )
-
-    fig, ax = plt.subplots(9, 1, sharex=True)
-    i = 0
-    ax[i].set_title("u_in")
-    ax[i].plot(res["recordings"][0]["u_in"][:, 0])
-    # ax[0].plot(t_res["recordings"][0]["u_in"][:, 0])
-
-    i += 1
-    ax[i].set_title("u pyr 1")
-    ax[i].plot(res["recordings"][1]["u_pyr"][:, 0])
-    # ax[1].plot(t_res["recordings"][1]["u_pyr"][:, 0])
-
-    i += 1
-    ax[i].set_title("u api 1")
-    ax[i].plot(res["recordings"][1]["v_api"][:, 0])
-    # ax[2].plot(t_res["recordings"][1]["v_api"][:, 0])
-
-    i += 1
-    ax[i].set_title("u pyr 2 and u tgt")
-    ax[i].plot(res["recordings"][2]["u_pyr"][:, 0], label="u_pyr")
-    # ax[3].plot(t_res["recordings"][2]["u_pyr"][:, 0])
-    ax[i].plot(res["recordings"][2]["u_tgt"][:, 0], label="u_tgt")
-
-    i += 1
-    ax[i].set_title("u pyr 2 and u tgt")
-    ax[i].plot(res["recordings"][2]["u_pyr"][:, 0], label="u_pyr")
-    # ax[3].plot(t_res["recordings"][2]["u_pyr"][:, 0])
-    ax[i].plot(res["recordings"][2]["u_tgt"][:, 0], label="u_tgt")
-
-    i += 1
-    ax[i].set_title("error: u_tgt - u_pyr")
-    ax[i].plot(
-        res["recordings"][2]["u_tgt"][:, 0] - res["recordings"][2]["u_pyr"][:, 0]
-    )
-
-    i += 1
-    ax[i].set_title("w up 1 and w up 2")
-    ax[i].plot(res["recordings"][1]["w_up"][:, 0, 0], label="w_up 1")
-    ax[i].plot(res["recordings"][2]["w_up"][:, 0, 0], label="w_up 2")
-
-    i += 1
-    ax[i].set_title("w down 1")
-    ax[i].plot(res["recordings"][1]["w_down"][:, 0, 0], label="w_down 1")
-
-    i += 1
-    ax[i].set_title("w pi and w ip")
-    ax[i].plot(res["recordings"][1]["w_pi"][:, 0, 0], label="w_pi 1")
-    ax[i].plot(res["recordings"][1]["w_ip"][:, 0, 0], label="w_ip 1")
-
-    ts = np.arange(len(res["recordings"][0]["u_in"]))
-
-    for axis in ax:
-        axis.grid()
-        axis.legend(loc="right")
-        y_lower, y_upper = axis.get_ylim()
-        axis.fill_between(
-            ts,
-            y_lower,
-            y_upper,
-            where=res["recordings"][2]["validation"].flatten(),
-            color="lightgray",
-            alpha=0.5,
-        )
-        axis.fill_between(
-            ts,
-            y_lower,
-            y_upper,
-            where=res["recordings"][2]["symmetrization"].flatten(),
-            color="orange",
-            alpha=0.5,
-        )
-
-    plt.tight_layout()
-    plt.show()
-
-
-def test_teacher():
-    network_properties = {
-        "t_ref": 25,
-        "n_last_spks": 1,
-        "dims": [1, 1, 1],
-        "tau_syn": 25,
-        "lambda_api": 0.5,
-        "lambda_nudge": 0.5,
-        "learning_lag": 0,
-        "size_moving_average": 1000,
-        "stdp_a_causal": 1.0,
-        "stdp_a_anticausal": 1.0,
-        "stdp_tau_causal": 25.0,
-        "stdp_tau_anticausal": 25.0,
-        "lr": [{"up": 0.0, "down": 0.0}, {"up": 0.0}],
-    }
-
-    u_in = {
-        "validation": [-1.5, -0.5, 0.5, 1.5],
-        "training": [-2.0, -1.0, 0.0, 1.0, 2.0],
-    }
-
-    teacher_parameters = {
-        "weights": [
-            {"w_up": 1.0},
-            {"w_up": 2.0},
-        ],
-        "bias": [-0.0, -0.0],
-    }
-
-    simulation_settings = {
-        "t_pattern": 500,
-        "len_epoch": 5,
-        "len_validation": 4,
-        "num_epochs": 1,
-        "poisson_seed": 78927,
-        "training_seed": 90234,
-        "shuffle_training": False,
-        "shuffle_validation": False,
-        "recorded_quantities": [
-            ["u_in"],
-            ["u_pyr", "v_bas", "v_api", "u_inn"],
-            ["u_pyr", "v_bas", "v_nudge", "u_tgt"],
-        ],
-    }
-
-    res = run_teacher(network_properties, teacher_parameters, simulation_settings, u_in)
-
-    with open("some_teacher_data.yaml", "w") as f:
-        yaml.dump(res, f)
-
-
-def test_student():
-    network_properties = {
-        "t_ref": 25,
-        "n_last_spks": 1,
-        "dims": [1, 1, 1],
-        "tau_syn": 25,
-        "lambda_api": 0.5,
-        "lambda_nudge": 0.5,
-        "learning_lag": 0,
-        "size_moving_average": 1000,
-        "stdp_a_causal": 1.0,
-        "stdp_a_anticausal": 1.0,
-        "stdp_tau_causal": 25.0,
-        "stdp_tau_anticausal": 25.0,
-        "lr": [{"up": 0.0, "down": 0.0}, {"up": 0.0}],
-    }
-
-    with open("some_teacher_data.yaml", "r") as f:
-        teacher_data = yaml.safe_load(f)
-
-    initial_parameters = {
-        "weights": [
-            {"w_up": 1.0},
-            {"w_up": 2.0},
-        ],
-        "bias": [-0.0, -0.0],
-    }
-
-    simulation_settings = {
-        "t_pattern": 500,
-        "len_epoch": 5,
-        "len_validation": 4,
-        "num_epochs": 1,
-        "poisson_seed": 78927,
-        "training_seed": 90234,
-        "shuffle_training": False,
-        "shuffle_validation": False,
-        "recorded_quantities": [
-            ["u_in"],
-            ["u_pyr", "v_bas", "v_api", "u_inn", "w_up", "w_down"],
-            ["u_pyr", "v_bas", "v_nudge", "u_tgt", "w_up"],
-        ],
-    }
-
-    res = run_student(
-        network_properties, initial_parameters, simulation_settings, teacher_data
-    )
-
-    fig, ax = plt.subplots(6, 1, sharex=True)
-    ax[0].set_title("u_in")
-    ax[0].plot(res["recordings"][0]["u_in"])
-
-    ax[1].set_title("u pyr 1")
-    ax[1].plot(res["recordings"][1]["u_pyr"])
-
-    ax[2].set_title("u api 1")
-    ax[2].plot(res["recordings"][1]["v_api"])
-
-    ax[3].set_title("u pyr 2 and u tgt")
-    ax[3].plot(res["recordings"][2]["u_pyr"])
-    ax[3].plot(res["recordings"][2]["u_tgt"])
-
-    ax[4].set_title("error: u_tgt - u_pyr")
-    ax[4].plot(res["recordings"][2]["u_tgt"] - res["recordings"][2]["u_pyr"])
-
-    ax[5].set_title("w up 1 and w up 2")
-    ax[5].plot(res["recordings"][1]["w_up"].flatten())
-    ax[5].plot(res["recordings"][2]["w_up"].flatten())
-
-    plt.tight_layout()
-    plt.show()
-
-
-if __name__ == "__main__":
-    # test_teacher()
-    # test_student()
-    test_all()

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from typing import Any, Callable
 
 import yaml
 
@@ -34,14 +35,22 @@ DEFAULT_PARAMS = {
     },
     "dataset": "cifar10",
 }
-ALLOWED_DATASETS = {"cifar10": cifar10, "mnist": mnist, "fmnist": fmnist, "svhn": svhn}
+ALLOWED_DATASETS: dict[str, Callable] = {
+    "cifar10": cifar10,
+    "mnist": mnist,
+    "fmnist": fmnist,
+    "svhn": svhn,
+}
 
 
-def parse_tags(s):
+def parse_tags(s: str | None) -> list[str]:
     return [tag.strip() for tag in s.split(",")] if s else []
 
 
-def load_params(param_file, section=None):
+def load_params(
+    param_file: str,
+    section: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str]:
     with open(param_file, "r") as f:
         content = yaml.safe_load(f)
     if section:
@@ -61,13 +70,25 @@ def load_params(param_file, section=None):
     )
 
 
-def merge(base, override):
+def merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     result = base.copy()
     result.update(override)
     return result
 
 
-def settings_loader():
+def settings_loader() -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Any],
+    Callable,
+    list[str],
+    list[str],
+    str | None,
+    str,
+    int,
+    str | None,
+    str | None,
+]:
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", type=str, help="Path to parameter file.")
     parser.add_argument("-s", type=str, help="Section name in YAML file.")
@@ -78,6 +99,14 @@ def settings_loader():
     parser.add_argument("--group_tags", type=str)
     parser.add_argument(
         "--output-dir", type=str, default="../../results/symm_net", dest="output_dir"
+    )
+    parser.add_argument("--seed", type=int, default=0, help="Random seed.")
+    parser.add_argument(
+        "--run-dir",
+        type=str,
+        default=None,
+        dest="run_dir",
+        help="Exact output directory; bypasses create_run_dirs() when set.",
     )
     args = parser.parse_args()
 
@@ -119,4 +148,7 @@ def settings_loader():
         group_tags_list,
         args.f,
         args.output_dir,
+        args.seed,
+        args.run_dir,
+        args.s,
     )

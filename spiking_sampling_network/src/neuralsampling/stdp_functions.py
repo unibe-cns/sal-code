@@ -1,16 +1,16 @@
-"""DOCSTRIG."""
+"""STDP kernels, spike correlation utilities, and the STDPRuler rule container."""
 
-from typing import Optional
+from typing import Callable
 
 import numba
 import numpy as np
 import numpy.typing as npt
 
 
-def get_first_order_stds(ordered_spikes, num_neurons):
-    """Obtain the first order spikes timing differences from a list of ordered
-    spikes
-    """
+def get_first_order_stds(
+    ordered_spikes: npt.NDArray, num_neurons: int
+) -> list[list[list[float]]]:
+    """Return nearest-neighbor spike timing differences for all neuron pairs."""
     pre_spikes = np.full(num_neurons, -1e10)
     interspike_times = [[[] for _ in range(num_neurons)] for _ in range(num_neurons)]
     for n, spike in enumerate(ordered_spikes):
@@ -30,17 +30,17 @@ def get_first_order_stds(ordered_spikes, num_neurons):
     return interspike_times
 
 
-def get_first_order_stds_2nrn(ordered_spikes, num_neurons):
-    """Obtain the dts between two neurons from a list of ordered spikes
+def get_first_order_stds_2nrn(
+    ordered_spikes: npt.NDArray, num_neurons: int
+) -> tuple[npt.NDArray, int]:
+    """Return nearest-neighbor spike timing differences for a two-neuron network.
 
-    Uses HX's next neighbor counting scheme. Works only if network consists of
-    two neurons. Uses less memory compared to get_interspike_times. Returns a
-    1-dim np.ndarray with the dts between the two neurons from the perspective
-    of neuron 1.
+    Args:
+        ordered_spikes: 2D array of (time, neuron_id) tuples.
+        num_neurons: Must be 2.
 
-    Input:
-        ordered_spikes  (list or np.ndarray) ordered spikes return by sbs
-        num_neurons     (int)
+    Returns:
+        Tuple of (dts array from neuron-0 perspective, number of dropped spikes).
     """
     if num_neurons > 2:
         raise ValueError("function works only for networks with two neurons")
@@ -67,8 +67,20 @@ def get_first_order_stds_2nrn(ordered_spikes, num_neurons):
     return np.asarray(interspike_times, dtype=np.float32), num_dropped_spikes
 
 
-# @jit(nopython=True)
-def calc_nn_stdp(ordered_spikes, num_neurons, kernel, kernel_args):
+def calc_nn_stdp(
+    ordered_spikes: npt.NDArray, num_neurons: int, kernel: Callable, kernel_args: tuple
+) -> npt.NDArray:
+    """Compute nearest-neighbor STDP correlations for all neuron pairs.
+
+    Args:
+        ordered_spikes: 2D array of (time, neuron_id) tuples.
+        num_neurons: Number of neurons.
+        kernel: STDP kernel function.
+        kernel_args: Arguments passed to the kernel.
+
+    Returns:
+        (num_neurons, num_neurons) STDP correlation matrix.
+    """
     pre_spikes = np.full(num_neurons, -1e10)
     corr_stdp = np.zeros((num_neurons, num_neurons))
     # use the identity matrix, because one has to devide corr_stdp by
@@ -90,7 +102,25 @@ def calc_nn_stdp(ordered_spikes, num_neurons, kernel, kernel_args):
 
 
 @numba.jit(nopython=True, cache=False)
-def spike_corr(ordered_spikes, dt, tmax, binsize, nrn_idx=(1, 2)):
+def spike_corr(
+    ordered_spikes: npt.NDArray,
+    dt: float,
+    tmax: float,
+    binsize: float,
+    nrn_idx: tuple[int, int] = (1, 2),
+) -> float:
+    """Compute the cross-correlation between two spike trains at lag dt.
+
+    Args:
+        ordered_spikes: 2D array of (time, neuron_id) tuples.
+        dt: Time lag applied to the first spike train.
+        tmax: Trial duration.
+        binsize: Bin size for spike train discretization.
+        nrn_idx: Pair of neuron IDs to correlate.
+
+    Returns:
+        Mean coincident spike count at lag dt.
+    """
     spk1 = ordered_spikes[np.where(ordered_spikes[:, 1] == float(nrn_idx[0]))][:, 0]
     # shift the first spike train by dt
     spk1 += dt
@@ -99,20 +129,42 @@ def spike_corr(ordered_spikes, dt, tmax, binsize, nrn_idx=(1, 2)):
     bins = np.arange(0, tmax + binsize, binsize)
     bins1, _ = np.histogram(spk1, bins=bins)
     bins2, _ = np.histogram(spk2, bins=bins)
-    cov = np.cov(np.vstack((bins1, bins2)))
-    return cov[0, 1]
+    corr = np.mean(bins1 * bins2)
+    return corr
 
 
 @numba.jit(nopython=True)
-def spike_corr_function(ordered_spikes, dts, tmax, binsize=0.5, nrn_idx=(1, 2)):
-    res = np.empty_like(dts)
+def spike_corr_function(
+    ordered_spikes: npt.NDArray,
+    dts: npt.NDArray,
+    tmax: float,
+    binsize: float = 0.5,
+    nrn_idx: tuple[int, int] = (1, 2),
+) -> npt.NDArray:
+    """Compute the cross-correlation function over a range of lags.
+
+    Args:
+        ordered_spikes: 2D array of (time, neuron_id) tuples.
+        dts: Array of time lags to evaluate.
+        tmax: Trial duration.
+        binsize: Bin size for spike train discretization.
+        nrn_idx: Pair of neuron IDs to correlate.
+
+    Returns:
+        Array of correlation values, one per lag in `dts`.
+    """
+    res = np.empty(len(dts))
     for i in numba.prange(len(dts)):
-        res[i] = spike_corr(ordered_spikes, dts[i], tmax, binsize, nrn_idx=nrn_idx)
+        r = spike_corr(ordered_spikes, dts[i], tmax, binsize, nrn_idx=nrn_idx)
+        res[i] = r
     return res
 
 
 @numba.njit(cache=False)
-def exp_kernel(dt, a_plus, a_minus, tau_plus, tau_minus):
+def exp_kernel(
+    dt: float, a_plus: float, a_minus: float, tau_plus: float, tau_minus: float
+) -> float:
+    """Exponential STDP kernel with separate amplitudes and time constants."""
     if dt > 0.0:
         return a_plus * np.exp(-dt / tau_plus)
     elif dt < 0.0:
@@ -122,7 +174,10 @@ def exp_kernel(dt, a_plus, a_minus, tau_plus, tau_minus):
 
 
 @numba.njit()
-def tri_kernel(dt, a_plus, a_minus, tau_plus, tau_minus):
+def tri_kernel(
+    dt: float, a_plus: float, a_minus: float, tau_plus: float, tau_minus: float
+) -> float:
+    """Triangular STDP kernel with separate amplitudes and time constants."""
     if dt > 0.0 and dt < tau_plus:
         return a_plus - dt * a_plus / tau_plus
     elif dt < 0.0 and dt > -tau_minus:
@@ -132,7 +187,25 @@ def tri_kernel(dt, a_plus, a_minus, tau_plus, tau_minus):
 
 
 @numba.jit(nopython=True, cache=False)
-def pairbased_stdp(kernel, kernel_args, ordered_spikes, num_neurons, num_last_spikes):
+def pairbased_stdp(
+    kernel: Callable,
+    kernel_args: tuple,
+    ordered_spikes: npt.NDArray,
+    num_neurons: int,
+    num_last_spikes: int,
+) -> npt.NDArray:
+    """Compute pair-based STDP considering the last N spikes of each neuron.
+
+    Args:
+        kernel: STDP kernel function.
+        kernel_args: Arguments passed to the kernel.
+        ordered_spikes: 2D array of (time, neuron_id) tuples.
+        num_neurons: Number of neurons.
+        num_last_spikes: Number of past spikes to consider per neuron.
+
+    Returns:
+        (num_neurons, num_neurons) STDP matrix.
+    """
     # traces = np.zeros(num_neurons)
     last_spikes = np.full((num_neurons, num_last_spikes), -np.inf)
     stdp = np.zeros((num_neurons, num_neurons))
@@ -160,7 +233,7 @@ def pairbased_stdp(kernel, kernel_args, ordered_spikes, num_neurons, num_last_sp
 @numba.jit(nopython=True, cache=False)
 def noised_pairbased_stdp(
     ordered_spikes: npt.NDArray,
-    kernel_func: callable,
+    kernel_func: Callable,
     a_plus: npt.NDArray,
     a_minus: npt.NDArray,
     tau_plus: npt.NDArray,
@@ -168,6 +241,21 @@ def noised_pairbased_stdp(
     num_neurons: int,
     num_last_spikes: int,
 ) -> npt.NDArray:
+    """Compute pair-based STDP with per-synapse kernel parameters.
+
+    Args:
+        ordered_spikes: 2D array of (time, neuron_id) tuples.
+        kernel_func: STDP kernel function.
+        a_plus: (N, N) potentiation amplitudes.
+        a_minus: (N, N) depression amplitudes.
+        tau_plus: (N, N) potentiation time constants.
+        tau_minus: (N, N) depression time constants.
+        num_neurons: Number of neurons.
+        num_last_spikes: Number of past spikes to consider per neuron.
+
+    Returns:
+        (num_neurons, num_neurons) STDP matrix.
+    """
     # traces = np.zeros(num_neurons)
     last_spikes = np.full((num_neurons, num_last_spikes), -np.inf)
     stdp = np.zeros((num_neurons, num_neurons))
@@ -205,11 +293,11 @@ def noised_pairbased_stdp(
 
 
 class STDPRuler:
-    """DOCSTRING."""
+    """Container for a pair-based STDP rule with per-synapse kernel parameters."""
 
     def __init__(
         self,
-        kernel_func: callable,
+        kernel_func: Callable,
         dims: int,
         num_last_spks: int,
         a_plus: npt.ArrayLike,
@@ -217,7 +305,7 @@ class STDPRuler:
         tau_plus: npt.ArrayLike,
         tau_minus: npt.ArrayLike,
     ):
-        """DOCSTRING."""
+        """Initialize per-synapse kernel parameter arrays."""
         self.kernel_func = kernel_func
         self.dims = dims
         self.num_last_spks = num_last_spks
@@ -248,14 +336,14 @@ class STDPRuler:
 
     @staticmethod
     def _copy_triu(tgt: npt.NDArray, src: npt.NDArray) -> None:
-        """DOCSTRING."""
+        """Copy the upper triangle of src into the upper triangle of tgt in-place."""
         tgt[np.triu_indices(tgt.shape[0], k=1)] = src[
             np.triu_indices(tgt.shape[0], k=1)
         ]
 
     @staticmethod
     def _copy_tril(tgt: npt.NDArray, src: npt.NDArray) -> None:
-        """DOCSTRING."""
+        """Copy the lower triangle of src into the lower triangle of tgt in-place."""
         tgt[np.tril_indices(tgt.shape[0], k=1)] = src[
             np.tril_indices(tgt.shape[0], k=1)
         ]
@@ -269,8 +357,8 @@ class STDPRuler:
         a_minus: npt.ArrayLike,
         tau_plus: npt.ArrayLike,
         tau_minus: npt.ArrayLike,
-    ):
-        """Docstring."""
+    ) -> "STDPRuler":
+        """Construct an STDPRuler using the exponential kernel."""
         return cls(
             exp_kernel, dims, num_last_spks, a_plus, a_minus, tau_minus, tau_minus
         )
@@ -284,20 +372,20 @@ class STDPRuler:
         a_minus: npt.ArrayLike,
         tau_plus: npt.ArrayLike,
         tau_minus: npt.ArrayLike,
-    ):
-        """Docstring."""
+    ) -> "STDPRuler":
+        """Construct an STDPRuler using the triangular kernel."""
         return cls(
             tri_kernel, dims, num_last_spks, a_plus, a_minus, tau_minus, tau_minus
         )
 
     def set_forward(
         self,
-        a_plus: Optional[npt.ArrayLike] = None,
-        a_minus: Optional[npt.ArrayLike] = None,
-        tau_plus: Optional[npt.ArrayLike] = None,
-        tau_minus: Optional[npt.ArrayLike] = None,
+        a_plus: npt.ArrayLike | None = None,
+        a_minus: npt.ArrayLike | None = None,
+        tau_plus: npt.ArrayLike | None = None,
+        tau_minus: npt.ArrayLike | None = None,
     ) -> None:
-        """DOCSTRING."""
+        """Update kernel parameters for the forward (upper triangle) direction."""
         if a_plus is not None:
             self._copy_triu(self.a_plus, a_plus)
         if a_minus is not None:
@@ -309,12 +397,12 @@ class STDPRuler:
 
     def set_backward(
         self,
-        a_plus: Optional[npt.ArrayLike] = None,
-        a_minus: Optional[npt.ArrayLike] = None,
-        tau_plus: Optional[npt.ArrayLike] = None,
-        tau_minus: Optional[npt.ArrayLike] = None,
+        a_plus: npt.ArrayLike | None = None,
+        a_minus: npt.ArrayLike | None = None,
+        tau_plus: npt.ArrayLike | None = None,
+        tau_minus: npt.ArrayLike | None = None,
     ) -> None:
-        """DOCSTRING."""
+        """Update kernel parameters for the backward (lower triangle) direction."""
         if a_plus is not None:
             self._copy_tril(self.a_plus, a_plus)
         if a_minus is not None:
@@ -325,7 +413,7 @@ class STDPRuler:
             self._copy_tril(self.tau_minus, tau_minus)
 
     def __call__(self, ordered_spks: npt.NDArray) -> npt.NDArray:
-        """DOCSTRING."""
+        """Apply the STDP rule to an ordered spike array."""
         return noised_pairbased_stdp(
             ordered_spks,
             self.kernel_func,
@@ -336,3 +424,11 @@ class STDPRuler:
             self.dims,
             self.num_last_spks,
         )
+
+    def noised_correlation_factors(self) -> npt.NDArray:
+        """Return per-synapse theoretical correlation factors (triangular kernel only)."""
+        if self.kernel_func != tri_kernel:
+            raise ValueError(
+                "The noised correlation factors are only defined if the STDP is triangular!"  # noqa
+            )
+        return 0.5 * (self.a_plus * self.tau_plus + self.a_minus * self.tau_minus)
