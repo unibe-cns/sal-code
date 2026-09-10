@@ -47,6 +47,15 @@ class PPDMaker:
         self._distribute_stddmakers()
         self.sal_grid = np.zeros((self.w_len, self.w_len, 2))
 
+    def __getstate__(self) -> dict:
+        """Custom __getstate__ for pickle.
+
+        Strip away the heavy _stddmaker_grid when pickling.
+        """
+        state = self.__dict__.copy()
+        state["_stddmaker_grid"] = []
+        return state
+
     @property
     def sal_12(self) -> npt.NDArray:
         """SAL values for W_12 (shape: w_len × w_len)."""
